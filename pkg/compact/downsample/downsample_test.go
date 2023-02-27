@@ -159,7 +159,7 @@ func TestExpandChunkIterator(t *testing.T) {
 	// Same timestamps are okay since we use them for counter markers.
 	var res []sample
 	testutil.Ok(t,
-		expandChunkIterator(
+		expandXorChunkIterator(
 			newSampleIterator([]sample{
 				{t: 100, v: 1}, {t: 200, v: 2}, {t: 200, v: 3}, {t: 201, v: 4}, {t: 200, v: 5},
 				{t: 300, v: 6}, {t: 400, v: math.Float64frombits(value.StaleNaN)}, {t: 500, v: 5},
@@ -500,7 +500,7 @@ func TestDownsample(t *testing.T) {
 					testutil.Ok(t, err)
 
 					buf := m[at]
-					testutil.Ok(t, expandChunkIterator(c.Iterator(nil), &buf))
+					testutil.Ok(t, expandXorChunkIterator(c.Iterator(nil), &buf))
 					m[at] = buf
 				}
 				got = append(got, m)
@@ -575,14 +575,14 @@ func TestDownSampleNativeHistogram(t *testing.T) {
 	logger := log.NewLogfmtLogger(os.Stderr)
 	dir := t.TempDir()
 	ser := &series{lset: labels.FromStrings("__name__", "a")}
-	raw := chunkenc.NewHistogramChunk()
+	raw := chunkenc.NewFloatHistogramChunk()
 	app, err := raw.Appender()
 	testutil.Ok(t, err)
 
-	histograms := tsdb.GenerateTestHistograms(4)
+	histograms := tsdb.GenerateTestFloatHistograms(4)
 
 	for i, h := range histograms {
-		app.AppendHistogram(int64(i+1)*200, h)
+		app.AppendFloatHistogram(int64(i+1)*200, h)
 	}
 
 	ser.chunks = append(ser.chunks, chunks.Meta{

@@ -41,7 +41,7 @@ func TestAggrChunk(t *testing.T) {
 	for _, at := range []AggrType{AggrCount, AggrSum, AggrMin, AggrMax, AggrCounter} {
 		if c, err := ac.Get(at); err != ErrAggrNotExist {
 			testutil.Ok(t, err)
-			testutil.Ok(t, expandChunkIterator(c.Iterator(nil), &res[at]))
+			testutil.Ok(t, expandXorChunkIterator(c.Iterator(nil), &res[at]))
 		}
 	}
 	testutil.Equals(t, input, res)
