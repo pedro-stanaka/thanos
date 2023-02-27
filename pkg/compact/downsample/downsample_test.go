@@ -10,6 +10,8 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/oklog/ulid"
+
 	"github.com/go-kit/log"
 	"github.com/pkg/errors"
 	"github.com/prometheus/prometheus/model/histogram"
@@ -592,40 +594,16 @@ func TestDownSampleNativeHistogram(t *testing.T) {
 	mb := newMemBlock()
 	mb.addSeries(ser)
 
-	fakeMeta := &metadata.Meta{}
+	fakeMeta := &metadata.Meta{
+		BlockMeta: tsdb.BlockMeta{
+			MinTime: 399,
+			MaxTime: 800,
+		},
+	}
 	id, err := Downsample(logger, fakeMeta, mb, dir, 400)
 	testutil.Ok(t, err)
 
-	newMeta, err := metadata.ReadFromDir(filepath.Join(dir, id.String()))
-	testutil.Ok(t, err)
-
-	testutil.Equals(t, int64(400), newMeta.Thanos.Downsample.Resolution)
-
-	indexr, err := index.NewFileReader(filepath.Join(dir, id.String(), block.IndexFilename))
-	testutil.Ok(t, err)
-	defer func() { testutil.Ok(t, indexr.Close()) }()
-
-	chunkr, err := chunks.NewDirReader(filepath.Join(dir, id.String(), block.ChunksDirname), NewPool())
-	testutil.Ok(t, err)
-	defer func() { testutil.Ok(t, chunkr.Close()) }()
-
-	pall, err := indexr.Postings(index.AllPostingsKey())
-	testutil.Ok(t, err)
-
-	var series []storage.SeriesRef
-	for pall.Next() {
-		series = append(series, pall.At())
-	}
-	testutil.Ok(t, pall.Err())
-	testutil.Equals(t, 1, len(series))
-
-	var builder labels.ScratchBuilder
-	var lset labels.Labels
-	var chks []chunks.Meta
-	testutil.Ok(t, indexr.Series(series[0], &builder, &chks))
-
-	lset = builder.Labels()
-	testutil.Equals(t, labels.FromStrings("__name__", "a"), lset)
+	newMeta, chks := getMetaAndChunks(t, dir, id)
 
 	expected := []struct {
 		count   []sample
@@ -637,14 +615,12 @@ func TestDownSampleNativeHistogram(t *testing.T) {
 		},
 	}
 
+	chunkr, err := chunks.NewDirReader(filepath.Join(dir, id.String(), block.ChunksDirname), NewPool())
+	testutil.Ok(t, err)
+	defer func() { testutil.Ok(t, chunkr.Close()) }()
+
 	for i, c := range chks {
-		chk, err := chunkr.Chunk(c)
-		testutil.Ok(t, err)
-
-		c, ok := chk.(*AggrChunk)
-		testutil.Assert(t, ok)
-
-		count, _, _ := expandHistogramAggregatorChunk(t, c)
+		count := getAggregatorFromChunk(t, chunkr, c)
 		testutil.Equals(t, expected[i].count, count)
 	}
 
@@ -655,6 +631,47 @@ func TestDownSampleNativeHistogram(t *testing.T) {
 
 	_, err = metadata.ReadFromDir(filepath.Join(dir, newId.String()))
 	testutil.Ok(t, err)
+}
+
+func getAggregatorFromChunk(t *testing.T, chunkr *chunks.Reader, c chunks.Meta) []sample {
+	chk, err := chunkr.Chunk(c)
+	testutil.Ok(t, err)
+
+	ag, ok := chk.(*AggrChunk)
+	testutil.Assert(t, ok)
+
+	count, _, _ := expandHistogramAggregatorChunk(t, ag)
+	return count
+}
+
+func getMetaAndChunks(t *testing.T, dir string, id ulid.ULID) (*metadata.Meta, []chunks.Meta) {
+	newMeta, err := metadata.ReadFromDir(filepath.Join(dir, id.String()))
+	testutil.Ok(t, err)
+
+	testutil.Equals(t, int64(400), newMeta.Thanos.Downsample.Resolution)
+
+	indexr, err := index.NewFileReader(filepath.Join(dir, id.String(), block.IndexFilename))
+	testutil.Ok(t, err)
+	defer func() { testutil.Ok(t, indexr.Close()) }()
+
+	pall, err := indexr.Postings(index.AllPostingsKey())
+	testutil.Ok(t, err)
+
+	var series []storage.SeriesRef
+	for pall.Next() {
+		series = append(series, pall.At())
+	}
+	testutil.Ok(t, pall.Err())
+	testutil.Equals(t, 1, len(series))
+
+	var chks []chunks.Meta
+	var lset labels.Labels
+	var builder labels.ScratchBuilder
+	testutil.Ok(t, indexr.Series(series[0], &builder, &chks))
+	lset = builder.Labels()
+	testutil.Equals(t, labels.FromStrings("__name__", "a"), lset)
+
+	return newMeta, chks
 }
 
 func expandHistogramAggregatorChunk(t *testing.T, c *AggrChunk) ([]sample, []sample, []sample) {
