@@ -139,7 +139,7 @@ func TestDownsampleCounterBoundaryReset(t *testing.T) {
 		testutil.Equals(t, test.rawCounterIterate, counterIterate(t, rawAggrChunks))
 
 		var buf []sample
-		acm, err := downsampleAggrLoop(rawAggrChunks, &buf, test.aggrAggrResolution, test.aggrChunks)
+		acm, err := downsampleAggrLoop(rawAggrChunks, &buf, test.aggrAggrResolution, test.aggrChunks, false)
 		testutil.Ok(t, err)
 		testutil.Equals(t, test.aggrChunks, len(acm))
 
@@ -596,8 +596,10 @@ func TestDownSampleNativeHistogram(t *testing.T) {
 	id, err := Downsample(logger, fakeMeta, mb, dir, 400)
 	testutil.Ok(t, err)
 
-	_, err = metadata.ReadFromDir(filepath.Join(dir, id.String()))
+	newMeta, err := metadata.ReadFromDir(filepath.Join(dir, id.String()))
 	testutil.Ok(t, err)
+
+	testutil.Equals(t, int64(400), newMeta.Thanos.Downsample.Resolution)
 
 	indexr, err := index.NewFileReader(filepath.Join(dir, id.String(), block.IndexFilename))
 	testutil.Ok(t, err)
@@ -645,6 +647,14 @@ func TestDownSampleNativeHistogram(t *testing.T) {
 		count, _, _ := expandHistogramAggregatorChunk(t, c)
 		testutil.Equals(t, expected[i].count, count)
 	}
+
+	blk, err := tsdb.OpenBlock(logger, filepath.Join(dir, id.String()), NewPool())
+	testutil.Ok(t, err)
+	newId, err := Downsample(logger, newMeta, blk, dir, 800)
+	testutil.Ok(t, err)
+
+	_, err = metadata.ReadFromDir(filepath.Join(dir, newId.String()))
+	testutil.Ok(t, err)
 }
 
 func expandHistogramAggregatorChunk(t *testing.T, c *AggrChunk) ([]sample, []sample, []sample) {
