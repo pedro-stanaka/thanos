@@ -570,8 +570,14 @@ Flags:
       --auto-gomemlimit.ratio=0.9
                                 The ratio of reserved GOMEMLIMIT memory to the
                                 detected maximum container or system memory.
-      --compaction=1... ...     Only blocks with these compaction levels will be
-                                replicated. Repeated flag.
+      --compaction=COMPACTION ...
+                                Only blocks with these compaction levels
+                                will be replicated. Repeated flag. Overrides
+                                compaction-min and compaction-max if set.
+      --compaction-max=4        Only blocks up to a maximum of this compaction
+                                level will be replicated.
+      --compaction-min=1        Only blocks with at least this compaction level
+                                will be replicated.
       --concurrency=1           The concurrency with which to replicate blocks
                                 from the source to the destination bucket.
       --enable-auto-gomemlimit  Enable go runtime to automatically limit memory
