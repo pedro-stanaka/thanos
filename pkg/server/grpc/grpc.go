@@ -77,7 +77,7 @@ func New(logger log.Logger, reg prometheus.Registerer, tracer opentracing.Tracer
 		// TODO(bwplotka): https://github.com/grpc-ecosystem/go-grpc-middleware/issues/462
 		grpc.MaxSendMsgSize(math.MaxInt32),
 		grpc.MaxRecvMsgSize(math.MaxInt32),
-		grpc_middleware.WithUnaryServerChain(
+		grpc.ChainUnaryInterceptor(
 			grpc_recovery.UnaryServerInterceptor(grpc_recovery.WithRecoveryHandler(grpcPanicRecoveryHandler)),
 			met.UnaryServerInterceptor(),
 			tags.UnaryServerInterceptor(tagsOpts...),
