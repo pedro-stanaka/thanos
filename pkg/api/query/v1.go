@@ -82,6 +82,9 @@ const (
 	LookbackDeltaParam       = "lookback_delta"
 	EngineParam              = "engine"
 	QueryAnalyzeParam        = "analyze"
+
+	QueryRangeMethodName   = "query_range"
+	InstantQueryMethodName = "query"
 )
 
 type PromqlEngineType string
@@ -179,7 +182,9 @@ type QueryAPI struct {
 	defaultInstantQueryMaxSourceResolution time.Duration
 	defaultMetadataTimeRange               time.Duration
 
-	queryRangeHist prometheus.Histogram
+	queryRangeHist     prometheus.Histogram
+	querySamplesLoaded *prometheus.HistogramVec
+	queryPeakSamples   *prometheus.HistogramVec
 
 	seriesStatsAggregatorFactory store.SeriesQueryPerformanceMetricsAggregatorFactory
 
@@ -258,10 +263,26 @@ func NewQueryAPI(
 		tenantLabel:                            tenantLabel,
 
 		queryRangeHist: promauto.With(reg).NewHistogram(prometheus.HistogramOpts{
-			Name:    "thanos_query_range_requested_timespan_duration_seconds",
-			Help:    "A histogram of the query range window in seconds",
-			Buckets: prometheus.ExponentialBuckets(15*60, 2, 12),
+			Name:                           "thanos_query_range_requested_timespan_duration_seconds",
+			Help:                           "A histogram of the query range window in seconds",
+			Buckets:                        prometheus.ExponentialBuckets(15*60, 2, 12),
+			NativeHistogramBucketFactor:    1.1,
+			NativeHistogramMaxBucketNumber: 256,
 		}),
+		querySamplesLoaded: promauto.With(reg).NewHistogramVec(prometheus.HistogramOpts{
+			Name:                           "thanos_query_total_samples_loaded",
+			Help:                           "A histogram of the number of samples loaded in a single query request",
+			Buckets:                        prometheus.ExponentialBuckets(10, 2, 10),
+			NativeHistogramBucketFactor:    1.1,
+			NativeHistogramMaxBucketNumber: 256,
+		}, []string{"method"}),
+		queryPeakSamples: promauto.With(reg).NewHistogramVec(prometheus.HistogramOpts{
+			Name:                           "thanos_query_peak_samples",
+			Help:                           "A histogram of the peak number of samples loaded in a single query request",
+			Buckets:                        prometheus.ExponentialBuckets(1, 2, 10),
+			NativeHistogramBucketFactor:    1.1,
+			NativeHistogramMaxBucketNumber: 256,
+		}, []string{"method"}),
 	}
 }
 
@@ -271,17 +292,17 @@ func (qapi *QueryAPI) Register(r *route.Router, tracer opentracing.Tracer, logge
 
 	instr := api.GetInstr(tracer, logger, ins, logMiddleware, qapi.disableCORS)
 
-	r.Get("/query", instr("query", qapi.query))
-	r.Post("/query", instr("query", qapi.query))
+	r.Get("/query", instr(InstantQueryMethodName, qapi.query))
+	r.Post("/query", instr(InstantQueryMethodName, qapi.query))
 
-	r.Get("/query_explain", instr("query", qapi.queryExplain))
-	r.Post("/query_explain", instr("query", qapi.queryExplain))
+	r.Get("/query_explain", instr(InstantQueryMethodName, qapi.queryExplain))
+	r.Post("/query_explain", instr(InstantQueryMethodName, qapi.queryExplain))
 
-	r.Get("/query_range", instr("query_range", qapi.queryRange))
-	r.Post("/query_range", instr("query_range", qapi.queryRange))
+	r.Get("/query_range", instr(QueryRangeMethodName, qapi.queryRange))
+	r.Post("/query_range", instr(QueryRangeMethodName, qapi.queryRange))
 
-	r.Get("/query_range_explain", instr("query", qapi.queryRangeExplain))
-	r.Post("/query_range_explain", instr("query", qapi.queryRangeExplain))
+	r.Get("/query_range_explain", instr(QueryRangeMethodName, qapi.queryRangeExplain))
+	r.Post("/query_range_explain", instr(QueryRangeMethodName, qapi.queryRangeExplain))
 
 	r.Get("/label/:name/values", instr("label_values", qapi.labelValues))
 
@@ -698,6 +719,8 @@ func (qapi *QueryAPI) query(r *http.Request) (interface{}, []error, *api.ApiErro
 	if err != nil {
 		return nil, nil, apiErr, func() {}
 	}
+	qapi.querySamplesLoaded.WithLabelValues(InstantQueryMethodName).Observe(float64(analysis.TotalSamples))
+	qapi.queryPeakSamples.WithLabelValues(InstantQueryMethodName).Observe(float64(analysis.PeakSamples))
 
 	tracing.DoInSpan(ctx, "query_gate_ismyturn", func(ctx context.Context) {
 		err = qapi.gate.Start(ctx)
@@ -999,6 +1022,8 @@ func (qapi *QueryAPI) queryRange(r *http.Request) (interface{}, []error, *api.Ap
 	if err != nil {
 		return nil, nil, apiErr, func() {}
 	}
+	qapi.querySamplesLoaded.WithLabelValues(QueryRangeMethodName).Observe(float64(analysis.TotalSamples))
+	qapi.queryPeakSamples.WithLabelValues(QueryRangeMethodName).Observe(float64(analysis.PeakSamples))
 
 	tracing.DoInSpan(ctx, "query_gate_ismyturn", func(ctx context.Context) {
 		err = qapi.gate.Start(ctx)
