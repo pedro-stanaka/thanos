@@ -20,7 +20,9 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"runtime"
@@ -244,7 +246,7 @@ func shouldNotCacheBecauseOfWarnings(warnings []error) bool {
 	return false
 }
 
-func Respond(w http.ResponseWriter, data interface{}, warnings []error) {
+func doRespond(w http.ResponseWriter, data interface{}, warnings []error, encFn encodeFunc) {
 	w.Header().Set("Content-Type", "application/json")
 	if shouldNotCacheBecauseOfWarnings(warnings) {
 		w.Header().Set("Cache-Control", "no-store")
@@ -258,7 +260,25 @@ func Respond(w http.ResponseWriter, data interface{}, warnings []error) {
 	for _, warn := range warnings {
 		resp.Warnings = append(resp.Warnings, warn.Error())
 	}
-	_ = sonic.ConfigFastest.NewEncoder(w).Encode(resp)
+	encFn(w, resp)
+}
+
+func RespondStdLib(w http.ResponseWriter, data interface{}, warnings []error) {
+	doRespond(w, data, warnings, EncodeReponseStdLib)
+}
+
+func Respond(w http.ResponseWriter, data interface{}, warnings []error) {
+	doRespond(w, data, warnings, EncodeReponseSonic)
+}
+
+type encodeFunc func(io.Writer, *response)
+
+func EncodeReponseStdLib(w io.Writer, r *response) {
+	_ = json.NewEncoder(w).Encode(r)
+}
+
+func EncodeReponseSonic(w io.Writer, r *response) {
+	_ = sonic.ConfigFastest.NewEncoder(w).Encode(r)
 }
 
 func RespondError(w http.ResponseWriter, apiErr *ApiError, data interface{}) {

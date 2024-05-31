@@ -170,7 +170,7 @@ func BenchmarkRespond(b *testing.B) {
 	data := fakeQueryData{
 		ResultType: "matrix",
 	}
-	data.Result = generateSeries(30, 5_000)
+	data.Result = generateSeries(40, 5_000)
 
 	w := httptest.NewRecorder()
 
@@ -178,5 +178,20 @@ func BenchmarkRespond(b *testing.B) {
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
 		Respond(w, data, nil)
+	}
+}
+
+func BenchmarkRespondStdLib(b *testing.B) {
+	data := fakeQueryData{
+		ResultType: "matrix",
+	}
+	data.Result = generateSeries(40, 5_000)
+
+	w := httptest.NewRecorder()
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		RespondStdLib(w, data, nil)
 	}
 }
