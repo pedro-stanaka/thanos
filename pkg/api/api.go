@@ -31,6 +31,7 @@ import (
 	"github.com/bytedance/sonic"
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
+	gojson "github.com/goccy/go-json"
 	"github.com/klauspost/compress/gzhttp"
 	"github.com/opentracing/opentracing-go"
 	"github.com/prometheus/common/route"
@@ -264,21 +265,29 @@ func doRespond(w http.ResponseWriter, data interface{}, warnings []error, encFn 
 }
 
 func RespondStdLib(w http.ResponseWriter, data interface{}, warnings []error) {
-	doRespond(w, data, warnings, EncodeReponseStdLib)
+	doRespond(w, data, warnings, EncodeResponseStdLib)
+}
+
+func RespondGoJson(w http.ResponseWriter, data interface{}, warnings []error) {
+	doRespond(w, data, warnings, EncodeGoJson)
 }
 
 func Respond(w http.ResponseWriter, data interface{}, warnings []error) {
-	doRespond(w, data, warnings, EncodeReponseSonic)
+	doRespond(w, data, warnings, EncodeResponseSonic)
 }
 
 type encodeFunc func(io.Writer, *response)
 
-func EncodeReponseStdLib(w io.Writer, r *response) {
+func EncodeResponseStdLib(w io.Writer, r *response) {
 	_ = json.NewEncoder(w).Encode(r)
 }
 
-func EncodeReponseSonic(w io.Writer, r *response) {
+func EncodeResponseSonic(w io.Writer, r *response) {
 	_ = sonic.ConfigFastest.NewEncoder(w).Encode(r)
+}
+
+func EncodeGoJson(w io.Writer, r *response) {
+	_ = gojson.NewEncoder(w).Encode(r)
 }
 
 func RespondError(w http.ResponseWriter, apiErr *ApiError, data interface{}) {

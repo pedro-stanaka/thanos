@@ -195,3 +195,18 @@ func BenchmarkRespondStdLib(b *testing.B) {
 		RespondStdLib(w, data, nil)
 	}
 }
+
+func BenchmarkRespondGoJson(b *testing.B) {
+	data := fakeQueryData{
+		ResultType: "matrix",
+	}
+	data.Result = generateSeries(40, 5_000)
+
+	w := httptest.NewRecorder()
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		RespondGoJson(w, data, nil)
+	}
+}
