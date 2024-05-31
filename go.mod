@@ -127,7 +127,11 @@ require (
 require (
 	github.com/HdrHistogram/hdrhistogram-go v1.1.2 // indirect
 	github.com/bboreham/go-loser v0.0.0-20230920113527-fcc2c21820a3 // indirect
+	github.com/bytedance/sonic v1.11.8 // indirect
+	github.com/bytedance/sonic/loader v0.1.1 // indirect
 	github.com/cilium/ebpf v0.11.0 // indirect
+	github.com/cloudwego/base64x v0.1.4 // indirect
+	github.com/cloudwego/iasm v0.2.0 // indirect
 	github.com/containerd/cgroups/v3 v3.0.3 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/go-openapi/runtime v0.27.1 // indirect
@@ -143,6 +147,7 @@ require (
 	github.com/opencontainers/runtime-spec v1.0.2 // indirect
 	github.com/pbnjay/memory v0.0.0-20210728143218-7b4eea64cf58 // indirect
 	github.com/sercand/kuberesolver/v4 v4.0.0 // indirect
+	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/zhangyunhao116/umap v0.0.0-20221211160557-cb7705fafa39 // indirect
 	go.opentelemetry.io/collector/featuregate v1.3.0 // indirect
 	go.opentelemetry.io/collector/pdata v1.3.0 // indirect
@@ -150,6 +155,7 @@ require (
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.49.0 // indirect
 	go.opentelemetry.io/contrib/propagators/ot v1.13.0 // indirect
 	go4.org/unsafe/assume-no-moving-gc v0.0.0-20230525183740-e7c30c78aeb2 // indirect
+	golang.org/x/arch v0.0.0-20210923205945-b76863e36670 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20240304212257-790db918fca8 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240304161311-37d4d3c04a78 // indirect
 	k8s.io/apimachinery v0.29.3 // indirect

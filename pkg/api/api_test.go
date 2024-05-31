@@ -18,6 +18,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -28,8 +29,11 @@ import (
 	"github.com/opentracing/opentracing-go"
 	"github.com/pkg/errors"
 	"github.com/prometheus/common/route"
+	"github.com/prometheus/prometheus/model/labels"
+	"github.com/prometheus/prometheus/promql"
 
 	"github.com/efficientgo/core/testutil"
+
 	extpromhttp "github.com/thanos-io/thanos/pkg/extprom/http"
 	"github.com/thanos-io/thanos/pkg/logging"
 )
@@ -137,5 +141,42 @@ func TestOptionsMethod(t *testing.T) {
 		if resp.Header.Get(h) != v {
 			t.Fatalf("Expected %q for header %q, got %q", v, h, resp.Header.Get(h))
 		}
+	}
+}
+
+type fakeQueryData struct {
+	ResultType string          `json:"resultType"`
+	Result     []promql.Series `json:"result"`
+}
+
+// generateSeries generates a series with a given number of samples.
+func generateSeries(numSeries, numSamples int) []promql.Series {
+	res := make([]promql.Series, 0, numSeries)
+
+	for i := 0; i < numSeries; i++ {
+		samples := make([]promql.FPoint, numSamples)
+		for j := 0; j < numSamples; j++ {
+			samples[j] = promql.FPoint{T: int64(j), F: float64(j * i)}
+		}
+		res = append(res, promql.Series{
+			Metric: labels.Labels{labels.Label{Name: "foo", Value: fmt.Sprintf("bar%d", i)}},
+		})
+	}
+
+	return res
+}
+
+func BenchmarkRespond(b *testing.B) {
+	data := fakeQueryData{
+		ResultType: "matrix",
+	}
+	data.Result = generateSeries(30, 5_000)
+
+	w := httptest.NewRecorder()
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		Respond(w, data, nil)
 	}
 }

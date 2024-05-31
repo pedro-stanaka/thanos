@@ -20,13 +20,13 @@
 package api
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
 	"runtime"
 	"time"
 
+	"github.com/bytedance/sonic"
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
 	"github.com/klauspost/compress/gzhttp"
@@ -258,7 +258,7 @@ func Respond(w http.ResponseWriter, data interface{}, warnings []error) {
 	for _, warn := range warnings {
 		resp.Warnings = append(resp.Warnings, warn.Error())
 	}
-	_ = json.NewEncoder(w).Encode(resp)
+	_ = sonic.ConfigFastest.NewEncoder(w).Encode(resp)
 }
 
 func RespondError(w http.ResponseWriter, apiErr *ApiError, data interface{}) {
@@ -280,7 +280,7 @@ func RespondError(w http.ResponseWriter, apiErr *ApiError, data interface{}) {
 	}
 	w.WriteHeader(code)
 
-	_ = json.NewEncoder(w).Encode(&response{
+	_ = sonic.ConfigFastest.NewEncoder(w).Encode(&response{
 		Status:    StatusError,
 		ErrorType: apiErr.Typ,
 		Error:     apiErr.Err.Error(),
