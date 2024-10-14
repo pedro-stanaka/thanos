@@ -54,7 +54,7 @@ func BenchmarkCapNProtoServer_SingleConcurrentClient(b *testing.B) {
 		)
 		listener = bufconn.Listen(1024)
 		handler  = NewCapNProtoHandler(log.NewNopLogger(), writer)
-		srv      = NewCapNProtoServer(listener, handler)
+		srv      = NewCapNProtoServer(listener, handler, log.NewNopLogger())
 	)
 	go func() {
 		_ = srv.ListenAndServe()

@@ -196,9 +196,10 @@ func newTestHandlerHashring(
 	}
 
 	var (
+		logger     = log.NewNopLogger()
 		closers    = make([]func() error, 0)
 		ag         = addrGen{}
-		limiter, _ = NewLimiter(NewNopConfig(), nil, RouterIngestor, log.NewNopLogger())
+		limiter, _ = NewLimiter(NewNopConfig(), nil, RouterIngestor, logger)
 	)
 	for i := range appendables {
 		h := NewHandler(nil, &Options{
@@ -222,7 +223,7 @@ func newTestHandlerHashring(
 				handler  = NewCapNProtoHandler(log.NewNopLogger(), writer)
 			)
 
-			srv := NewCapNProtoServer(listener, handler)
+			srv := NewCapNProtoServer(listener, handler, logger)
 			client := writecapnp.NewRemoteWriteClient(listener, log.NewNopLogger())
 			closers = append(closers, func() error {
 				srv.Shutdown()

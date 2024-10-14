@@ -13,18 +13,28 @@ import (
 	"github.com/go-kit/log/level"
 	"github.com/pkg/errors"
 
+	"github.com/thanos-io/thanos/pkg/pool"
 	"github.com/thanos-io/thanos/pkg/receive/writecapnp"
+	"github.com/thanos-io/thanos/pkg/runutil"
 )
 
 type CapNProtoServer struct {
 	listener net.Listener
 	server   writecapnp.Writer
+	logger   log.Logger
+	workers  pool.WorkerPool
 }
 
-func NewCapNProtoServer(listener net.Listener, handler *CapNProtoHandler) *CapNProtoServer {
+func NewCapNProtoServer(listener net.Listener, handler *CapNProtoHandler, logger log.Logger) *CapNProtoServer {
+	const cpnpWorkerPoolSize = 512
+
 	return &CapNProtoServer{
 		listener: listener,
 		server:   writecapnp.Writer_ServerToClient(handler),
+		logger:   logger,
+		workers: pool.NewWorkerPool(
+			cpnpWorkerPoolSize,
+		),
 	}
 }
 
@@ -34,15 +44,16 @@ func (c *CapNProtoServer) ListenAndServe() error {
 		if err != nil {
 			return err
 		}
-		go func() {
-			defer conn.Close()
+
+		c.workers.Go(func() {
+			defer runutil.CloseWithLogOnErr(c.logger, conn, "receive capnp conn")
 			rpcConn := rpc.NewConn(rpc.NewPackedStreamTransport(conn), &rpc.Options{
 				// The BootstrapClient is the RPC interface that will be made available
 				// to the remote endpoint by default.
 				BootstrapClient: capnp.Client(c.server).AddRef(),
 			})
 			<-rpcConn.Done()
-		}()
+		})
 	}
 }
 
