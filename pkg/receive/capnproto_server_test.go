@@ -26,7 +26,7 @@ func TestCapNProtoServer_SingleConcurrentClient(t *testing.T) {
 		)
 		listener = bufconn.Listen(1024)
 		handler  = NewCapNProtoHandler(log.NewNopLogger(), writer)
-		srv      = NewCapNProtoServer(listener, handler)
+		srv      = NewCapNProtoServer(listener, handler, log.NewNopLogger())
 	)
 	go func() {
 		_ = srv.ListenAndServe()
@@ -54,7 +54,7 @@ func TestCapNProtoServer_MultipleConcurrentClients(t *testing.T) {
 		)
 		listener = bufconn.Listen(1024)
 		handler  = NewCapNProtoHandler(log.NewNopLogger(), writer)
-		srv      = NewCapNProtoServer(listener, handler)
+		srv      = NewCapNProtoServer(listener, handler, log.NewNopLogger())
 	)
 	go func() {
 		_ = srv.ListenAndServe()

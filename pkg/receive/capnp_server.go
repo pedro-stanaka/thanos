@@ -14,17 +14,20 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/thanos-io/thanos/pkg/receive/writecapnp"
+	"github.com/thanos-io/thanos/pkg/runutil"
 )
 
 type CapNProtoServer struct {
 	listener net.Listener
 	server   writecapnp.Writer
+	logger   log.Logger
 }
 
-func NewCapNProtoServer(listener net.Listener, handler *CapNProtoHandler) *CapNProtoServer {
+func NewCapNProtoServer(listener net.Listener, handler *CapNProtoHandler, logger log.Logger) *CapNProtoServer {
 	return &CapNProtoServer{
 		listener: listener,
 		server:   writecapnp.Writer_ServerToClient(handler),
+		logger:   logger,
 	}
 }
 
@@ -34,8 +37,9 @@ func (c *CapNProtoServer) ListenAndServe() error {
 		if err != nil {
 			return err
 		}
+
 		go func() {
-			defer conn.Close()
+			defer runutil.CloseWithLogOnErr(c.logger, conn, "receive capnp conn")
 			rpcConn := rpc.NewConn(rpc.NewPackedStreamTransport(conn), &rpc.Options{
 				// The BootstrapClient is the RPC interface that will be made available
 				// to the remote endpoint by default.

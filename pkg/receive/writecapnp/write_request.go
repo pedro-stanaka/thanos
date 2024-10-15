@@ -4,6 +4,8 @@
 package writecapnp
 
 import (
+	"unsafe"
+
 	"github.com/prometheus/prometheus/model/exemplar"
 	"github.com/prometheus/prometheus/model/histogram"
 	"github.com/prometheus/prometheus/model/labels"
@@ -59,7 +61,9 @@ func NewRequest(wr WriteRequest) (*Request, error) {
 	start := uint32(0)
 	for i := 0; i < offsets.Len(); i++ {
 		end := offsets.At(i)
-		*strings = append(*strings, string(data[start:end]))
+
+		b := data[start:end]
+		*strings = append(*strings, unsafe.String(&b[0], len(b)))
 		start = end
 	}
 
