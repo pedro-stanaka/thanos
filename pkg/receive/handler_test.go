@@ -223,7 +223,7 @@ func newTestHandlerHashring(
 				handler  = NewCapNProtoHandler(log.NewNopLogger(), writer)
 			)
 
-			srv := NewCapNProtoServer(listener, handler, logger)
+			srv := NewCapNProtoServer(listener, handler, log.NewNopLogger())
 			client := writecapnp.NewRemoteWriteClient(listener, log.NewNopLogger())
 			closers = append(closers, func() error {
 				srv.Shutdown()
