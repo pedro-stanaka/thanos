@@ -5,6 +5,9 @@ package receive
 
 import (
 	"context"
+	"strings"
+
+	"github.com/thanos-io/thanos/pkg/store/labelpb"
 
 	"github.com/go-kit/log"
 	"github.com/pkg/errors"
@@ -63,15 +66,35 @@ func (r *CapNProtoWriter) Write(ctx context.Context, tenantID string, wreq *writ
 		Appender:       app,
 	}
 
-	var series writecapnp.Series
+	var (
+		series  writecapnp.Series
+		builder labels.ScratchBuilder
+	)
 	for wreq.Next() {
-		wreq.At(&series)
+		if err := wreq.At(&series); err != nil {
+			return errors.Wrap(err, "request.At")
+		}
+
+		// Check if time series labels are valid. If not, skip the time series
+		// and report the error.
+		if err := validateLabels(series.Labels); err != nil {
+			lset := &labelpb.ZLabelSet{Labels: labelpb.ZLabelsFromPromLabels(series.Labels)}
+			errorTracker.addLabelsError(err, lset, tLogger)
+			continue
+		}
 
 		var lset labels.Labels
 		// Check if the TSDB has cached reference for those labels.
 		ref, lset = getRef.GetRef(series.Labels, series.Labels.Hash())
 		if ref == 0 {
-			lset = series.Labels.Copy()
+			// NOTE(GiedriusS): do a deep copy because the labels are reused in the capnp message.
+			// Creation of new series is much rarer compared to adding extra samples
+			// to an existing series.
+			builder.Reset()
+			series.Labels.Range(func(l labels.Label) {
+				builder.Add(strings.Clone(l.Name), strings.Clone(l.Value))
+			})
+			lset = builder.Labels()
 		}
 
 		// Append as many valid samples as possible, but keep track of the errors.
@@ -85,7 +108,7 @@ func (r *CapNProtoWriter) Write(ctx context.Context, tenantID string, wreq *writ
 			errorTracker.addHistogramError(err, tLogger, lset, hp.Timestamp)
 		}
 
-		// Current implemetation of app.AppendExemplar doesn't create a new series, so it must be already present.
+		// Current implementation of app.AppendExemplar doesn't create a new series, so it must be already present.
 		// We drop the exemplars in case the series doesn't exist.
 		if ref != 0 && len(series.Exemplars) > 0 {
 			for _, ex := range series.Exemplars {
@@ -108,4 +131,40 @@ func (r *CapNProtoWriter) Write(ctx context.Context, tenantID string, wreq *writ
 		errs.Add(errors.Wrap(err, "commit samples"))
 	}
 	return errs.ErrOrNil()
+}
+
+// ValidateLabels validates label names and values (checks for empty
+// names and values, out of order labels and duplicate label names)
+// Returns appropriate error if validation fails on a label.
+func validateLabels(lbls labels.Labels) error {
+	if lbls.Len() == 0 {
+		return labelpb.ErrEmptyLabels
+	}
+
+	var (
+		prev *labels.Label
+		err  error
+	)
+	lbls.Range(func(l labels.Label) {
+		if err != nil {
+			return
+		}
+		if l.Name == "" || l.Value == "" {
+			err = labelpb.ErrEmptyLabels
+		}
+		if prev == nil {
+			prev = &l
+			return
+		}
+
+		if l.Name == prev.Name {
+			err = labelpb.ErrDuplicateLabels
+		}
+		if l.Name < prev.Name {
+			err = labelpb.ErrOutOfOrderLabels
+		}
+		prev = &l
+	})
+
+	return err
 }
