@@ -166,7 +166,6 @@ func (f *QueryEngineFactory) GetThanosEngine() ThanosEngine {
 			opts.LogicalOptimizers = []logicalplan.Optimizer{
 				logicalplan.DetectHistogramStatsOptimizer{},
 				logicalplan.PassthroughOptimizer{Endpoints: f.remoteEngineEndpoints},
-				logicalplan.DistributeAvgOptimizer{},
 				logicalplan.DistributedExecutionOptimizer{Endpoints: f.remoteEngineEndpoints},
 				query.SetProjectionLabels{},
 			}
