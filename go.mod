@@ -329,9 +329,6 @@ replace (
 	// Override due to https://github.com/weaveworks/common/issues/239
 	github.com/sercand/kuberesolver/v4 => github.com/sercand/kuberesolver/v5 v5.1.1
 
-	// https://github.com/thanos-io/promql-engine/pull/470
-	github.com/thanos-io/promql-engine => github.com/fpetkovski/promql-engine v0.0.0-20240723151234-9e1a96ab4abd
-
 	github.com/vimeo/galaxycache => github.com/thanos-community/galaxycache v0.0.0-20211122094458-3a32041a1f1e
 
 	// Overriding to use latest commit.
