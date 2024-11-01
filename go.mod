@@ -65,7 +65,7 @@ require (
 	github.com/sony/gobreaker v0.5.0
 	github.com/stretchr/testify v1.9.0
 	github.com/thanos-io/objstore v0.0.0-20240309075357-e8336a5fd5f3
-	github.com/thanos-io/promql-engine v0.0.0-20240718195911-cdbd6dfed36b
+	github.com/thanos-io/promql-engine v0.0.0-20241101094502-0b7a5d675b12
 	github.com/uber/jaeger-client-go v2.30.0+incompatible
 	github.com/uber/jaeger-lib v2.4.1+incompatible // indirect
 	github.com/vimeo/galaxycache v0.0.0-20210323154928-b7e5d71c067a
@@ -328,9 +328,6 @@ replace (
 
 	// Override due to https://github.com/weaveworks/common/issues/239
 	github.com/sercand/kuberesolver/v4 => github.com/sercand/kuberesolver/v5 v5.1.1
-
-	// https://github.com/thanos-io/promql-engine/pull/470
-	github.com/thanos-io/promql-engine => github.com/fpetkovski/promql-engine v0.0.0-20240723151234-9e1a96ab4abd
 
 	github.com/vimeo/galaxycache => github.com/thanos-community/galaxycache v0.0.0-20211122094458-3a32041a1f1e
 
