@@ -313,7 +313,12 @@ Flags:
                                  lookups. The port defaults to 9093 or the
                                  SRV record's value. The URL path is used as a
                                  prefix for the regular Alertmanager API path.
+      --auto-gomemlimit.ratio=0.9
+                                 The ratio of reserved GOMEMLIMIT memory to the
+                                 detected maximum container or system memory.
       --data-dir="data/"         data directory
+      --enable-auto-gomemlimit   Enable go runtime to automatically limit memory
+                                 consumption.
       --eval-interval=1m         The default evaluation interval to use.
       --for-grace-period=10m     Minimum duration between alert and restored
                                  "for" state. This is maintained only for alerts
@@ -367,15 +372,6 @@ Flags:
       --log.format=logfmt        Log format to use. Possible options: logfmt or
                                  json.
       --log.level=info           Log filtering level.
-      --log.request.decision=    Deprecation Warning - This flag would
-                                 be soon deprecated, and replaced with
-                                 `request.logging-config`. Request Logging
-                                 for logging the start and end of requests. By
-                                 default this flag is disabled. LogFinishCall:
-                                 Logs the finish call of the requests.
-                                 LogStartAndFinishCall: Logs the start and
-                                 finish call of the requests. NoLogCall: Disable
-                                 request logging.
       --objstore.config=<content>
                                  Alternative to 'objstore.config-file'
                                  flag (mutually exclusive). Content of

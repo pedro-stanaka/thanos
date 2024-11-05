@@ -279,6 +279,9 @@ usage: thanos compact [<flags>]
 Continuously compacts blocks in an object store bucket.
 
 Flags:
+      --auto-gomemlimit.ratio=0.9
+                                The ratio of reserved GOMEMLIMIT memory to the
+                                detected maximum container or system memory.
       --block-files-concurrency=1
                                 Number of goroutines to use when
                                 fetching/uploading block files from object
@@ -366,6 +369,8 @@ Flags:
                                 non-downsampled data is not efficient and useful
                                 e.g it is not possible to render all samples for
                                 a human eye anyway
+      --enable-auto-gomemlimit  Enable go runtime to automatically limit memory
+                                consumption.
       --hash-func=              Specify which hash function to use when
                                 calculating the hashes of produced files.
                                 If no function has been specified, it does not

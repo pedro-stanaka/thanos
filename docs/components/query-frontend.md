@@ -189,10 +189,15 @@ Query frontend command implements a service deployed in front of queriers to
 improve query parallelization and caching.
 
 Flags:
+      --auto-gomemlimit.ratio=0.9
+                                 The ratio of reserved GOMEMLIMIT memory to the
+                                 detected maximum container or system memory.
       --cache-compression-type=""
                                  Use compression in results cache.
                                  Supported values are: 'snappy' and ” (disable
                                  compression).
+      --enable-auto-gomemlimit   Enable go runtime to automatically limit memory
+                                 consumption.
   -h, --help                     Show context-sensitive help (also try
                                  --help-long and --help-man).
       --http-address="0.0.0.0:10902"
@@ -236,15 +241,6 @@ Flags:
       --log.format=logfmt        Log format to use. Possible options: logfmt or
                                  json.
       --log.level=info           Log filtering level.
-      --log.request.decision=    Deprecation Warning - This flag would
-                                 be soon deprecated, and replaced with
-                                 `request.logging-config`. Request Logging
-                                 for logging the start and end of requests.
-                                 By default this flag is disabled. LogFinishCall
-                                 : Logs the finish call of the requests.
-                                 LogStartAndFinishCall : Logs the start and
-                                 finish call of the requests. NoLogCall :
-                                 Disable request logging.
       --query-frontend.compress-responses
                                  Compress HTTP responses.
       --query-frontend.downstream-tripper-config=<content>

@@ -47,6 +47,9 @@ Store node giving access to blocks in a bucket provider. Now supported GCS, S3,
 Azure, Swift, Tencent COS and Aliyun OSS.
 
 Flags:
+      --auto-gomemlimit.ratio=0.9
+                                 The ratio of reserved GOMEMLIMIT memory to the
+                                 detected maximum container or system memory.
       --block-meta-fetch-concurrency=32
                                  Number of goroutines to use when fetching block
                                  metadata from object storage.
@@ -78,6 +81,8 @@ Flags:
                                  cause the store to read them. For such use
                                  cases use Prometheus + sidecar. Ignored if
                                  --no-cache-index-header option is specified.
+      --enable-auto-gomemlimit   Enable go runtime to automatically limit memory
+                                 consumption.
       --grpc-address="0.0.0.0:10901"
                                  Listen ip:port address for gRPC endpoints
                                  (StoreAPI). Make sure this address is routable

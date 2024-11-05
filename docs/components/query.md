@@ -294,6 +294,11 @@ Flags:
       --alert.query-url=ALERT.QUERY-URL
                                  The external Thanos Query URL that would be set
                                  in all alerts 'Source' field.
+      --auto-gomemlimit.ratio=0.9
+                                 The ratio of reserved GOMEMLIMIT memory to the
+                                 detected maximum container or system memory.
+      --enable-auto-gomemlimit   Enable go runtime to automatically limit memory
+                                 consumption.
       --enable-feature= ...      Comma separated experimental feature names
                                  to enable.The current list of features is
                                  query-pushdown.
@@ -363,15 +368,6 @@ Flags:
       --log.format=logfmt        Log format to use. Possible options: logfmt or
                                  json.
       --log.level=info           Log filtering level.
-      --log.request.decision=    Deprecation Warning - This flag would
-                                 be soon deprecated, and replaced with
-                                 `request.logging-config`. Request Logging
-                                 for logging the start and end of requests. By
-                                 default this flag is disabled. LogFinishCall:
-                                 Logs the finish call of the requests.
-                                 LogStartAndFinishCall: Logs the start and
-                                 finish call of the requests. NoLogCall: Disable
-                                 request logging.
       --query.active-query-path=""
                                  Directory to log currently active queries in
                                  the queries.active file.
