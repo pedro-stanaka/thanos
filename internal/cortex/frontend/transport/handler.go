@@ -41,7 +41,7 @@ var (
 	errRequestEntityTooLarge = httpgrpc.Errorf(http.StatusRequestEntityTooLarge, "http: request body too large")
 )
 
-// Config for a Handler.
+// HandlerConfig Config for a Handler.
 type HandlerConfig struct {
 	LogQueriesLongerThan    time.Duration `yaml:"log_queries_longer_than"`
 	MaxBodySize             int64         `yaml:"max_body_size"`
@@ -95,15 +95,14 @@ func NewHandler(cfg HandlerConfig, roundTripper http.RoundTripper, log log.Logge
 		})
 		// If cleaner stops or fail, we will simply not clean the metrics for inactive users.
 		_ = h.activeUsers.StartAsync(context.Background())
+		h.queryLatency = promauto.With(reg).NewHistogramVec(prometheus.HistogramOpts{
+			Name:                           "cortex_query_latency_seconds",
+			Help:                           "Query latency in seconds.",
+			Buckets:                        prometheus.ExponentialBuckets(0.001, 2, 10),
+			NativeHistogramBucketFactor:    1.1,
+			NativeHistogramMaxBucketNumber: 512,
+		}, []string{"status", "user"})
 	}
-
-	h.queryLatency = promauto.With(reg).NewHistogramVec(prometheus.HistogramOpts{
-		Name:                           "cortex_query_latency_seconds",
-		Help:                           "Query latency in seconds.",
-		Buckets:                        prometheus.ExponentialBuckets(0.001, 2, 10),
-		NativeHistogramBucketFactor:    1.1,
-		NativeHistogramMaxBucketNumber: 512,
-	}, []string{"status", "user"})
 
 	return h
 }
@@ -136,14 +135,9 @@ func (f *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	queryResponseTime := time.Since(startTime)
 	f.reportQueryLatency(r, w.Header(), queryResponseTime, err)
 
-	// Check whether we should parse the query string.
-	if f.shouldReportQueryAsSlow(queryResponseTime) || f.cfg.QueryStatsEnabled || err != nil {
-		queryString = f.parseRequestQueryString(r, buf)
-	}
-
 	if err != nil {
 		writeError(w, err)
-		f.reportFailedQuery(r, queryString, err)
+		f.reportFailedQuery(r, queryResponseTime, queryString, err)
 		return
 	}
 
@@ -163,8 +157,16 @@ func (f *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		level.Error(util_log.WithContext(r.Context(), f.log)).Log("msg", "write response body error", "bytesCopied", bytesCopied, "err", err)
 	}
 
-	if f.shouldReportQueryAsSlow(queryResponseTime) {
-		f.reportSlowQuery(r, hs, queryString, queryResponseTime)
+	// Check whether we should parse the query string.
+	shouldReportSlowQuery := f.cfg.LogQueriesLongerThan != 0 &&
+		queryResponseTime > f.cfg.LogQueriesLongerThan &&
+		isQueryEndpoint(r.URL.Path)
+	if shouldReportSlowQuery || f.cfg.QueryStatsEnabled {
+		queryString = f.parseRequestQueryString(r, buf)
+	}
+
+	if shouldReportSlowQuery {
+		f.reportSlowQuery(r, hs, queryString, queryResponseTime, stats)
 	}
 	if f.cfg.QueryStatsEnabled {
 		f.reportQueryStats(r, queryString, queryResponseTime, stats)
@@ -172,14 +174,14 @@ func (f *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // reportFailedQuery reports querie with error.
-func (f *Handler) reportFailedQuery(r *http.Request, queryString url.Values, err error) {
-	if !isQueryPath(r.URL.Path) {
+func (f *Handler) reportFailedQuery(r *http.Request, responseTime time.Duration, queryString url.Values, err error) {
+	if isQueryEndpoint(r.URL.Path) {
 		return
 	}
 	var (
 		headers      = f.getHeaderInfo(r)
-		remoteUser   = f.remoteUser(r)
 		requestId, _ = getRequestId(r)
+		remoteUser   = f.remoteUser(r)
 	)
 	logMessage := append(append([]interface{}{
 		"msg", "failed query detected",
@@ -187,77 +189,25 @@ func (f *Handler) reportFailedQuery(r *http.Request, queryString url.Values, err
 		"method", r.Method,
 		"host", r.Host,
 		"path", r.URL.Path,
+		"time_taken", responseTime.String(),
 		"remote_user", remoteUser,
 		"remote_addr", r.RemoteAddr,
 		"request_id", requestId,
 	}, headers...), formatQueryString(queryString)...)
+	logMessage = addQueryRangeToLogMessage(logMessage, queryString)
 
-	queryRange := extractQueryRange(queryString)
-	if queryRange != time.Duration(0) {
-		logMessage = append(logMessage, "query_range_hours", int(queryRange.Hours()))
-		logMessage = append(logMessage, "query_range_human", queryRange.String())
-	}
 	level.Info(util_log.WithContext(r.Context(), f.log)).Log(logMessage...)
 }
 
-func isQueryPath(path string) bool {
-	return strings.HasPrefix(path, "/api/v1/query") || strings.HasPrefix(path, "/api/v1/query_range")
-}
-
-// extractQueryRange extracts query range from query string.
-// If start and end are not provided or are invalid, it returns a duration with zero-value.
-func extractQueryRange(queryString url.Values) time.Duration {
-	startStr := queryString.Get("start")
-	endStr := queryString.Get("end")
-	var queryRange = time.Duration(0)
-	if startStr != "" && endStr != "" {
-		start, serr := util.ParseTime(startStr)
-		end, eerr := util.ParseTime(endStr)
-		if serr == nil && eerr == nil {
-			queryRange = time.Duration(end-start) * time.Millisecond
-		}
+func (f *Handler) remoteUser(r *http.Request) string {
+	remoteUser := "-"
+	// Prefer reading remote user from header. Fall back to the value of basic authentication.
+	if f.cfg.SlowQueryLogsUserHeader != "" {
+		remoteUser = r.Header.Get(f.cfg.SlowQueryLogsUserHeader)
+	} else {
+		remoteUser, _, _ = r.BasicAuth()
 	}
-	return queryRange
-}
-
-// reportSlowQuery reports slow queries.
-func (f *Handler) reportSlowQuery(r *http.Request, responseHeaders http.Header, queryString url.Values, queryResponseTime time.Duration) {
-	if !isQueryPath(r.URL.Path) {
-		return
-	}
-	var (
-		headers          = f.getHeaderInfo(r)
-		remoteUser       = f.remoteUser(r)
-		thanosTraceID, _ = getTraceId(responseHeaders)
-		requestId, _     = getRequestId(r)
-	)
-	logMessage := append(append([]interface{}{
-		"msg", "slow query detected",
-		"method", r.Method,
-		"host", r.Host,
-		"path", r.URL.Path,
-		"remote_user", remoteUser,
-		"remote_addr", r.RemoteAddr,
-		"time_taken", queryResponseTime.String(),
-		"trace_id", thanosTraceID,
-		"request_id", requestId,
-	}, headers...), formatQueryString(queryString)...)
-
-	queryRange := extractQueryRange(queryString)
-	if queryRange != time.Duration(0) {
-		logMessage = append(logMessage, "query_range_hours", int(queryRange.Hours()))
-		logMessage = append(logMessage, "query_range_human", queryRange.String())
-	}
-	level.Info(util_log.WithContext(r.Context(), f.log)).Log(logMessage...)
-}
-
-func (f *Handler) shouldReportQueryAsSlow(duration time.Duration) bool {
-	return f.cfg.LogQueriesLongerThan > 0 && duration > f.cfg.LogQueriesLongerThan
-}
-
-func getTraceId(responseHeaders http.Header) (string, bool) {
-	traceID := responseHeaders.Get("X-Thanos-Trace-Id")
-	return traceID, traceID != ""
+	return remoteUser
 }
 
 func getRequestId(r *http.Request) (string, bool) {
@@ -282,13 +232,53 @@ func (f *Handler) getHeaderInfo(r *http.Request) (fields []interface{}) {
 	return fields
 }
 
-func (f *Handler) remoteUser(r *http.Request) string {
-	// Prefer reading remote user from header. Fall back to the value of basic authentication.
-	if f.cfg.SlowQueryLogsUserHeader != "" {
-		return r.Header.Get(f.cfg.SlowQueryLogsUserHeader)
+// isQueryEndpoint returns true if the path is any of the Prometheus HTTP API,
+// query-related endpoints.
+// Example: /api/v1/query, /api/v1/query_range, /api/v1/series, /api/v1/label, /api/v1/labels
+func isQueryEndpoint(path string) bool {
+	return strings.HasPrefix(path, "/api/v1")
+}
+
+// reportSlowQuery reports slow queries.
+func (f *Handler) reportSlowQuery(
+	r *http.Request,
+	responseHeaders http.Header,
+	queryString url.Values,
+	queryResponseTime time.Duration,
+	stats *querier_stats.Stats,
+) {
+	// NOTE(GiedriusS): see https://github.com/grafana/grafana/pull/60301 for more info.
+	grafanaDashboardUID := "-"
+	if dashboardUID := r.Header.Get("X-Dashboard-Uid"); dashboardUID != "" {
+		grafanaDashboardUID = dashboardUID
 	}
-	remoteUser, _, _ := r.BasicAuth()
-	return remoteUser
+	grafanaPanelID := "-"
+	if panelID := r.Header.Get("X-Panel-Id"); panelID != "" {
+		grafanaPanelID = panelID
+	}
+	thanosTraceID := "-"
+	if traceID := responseHeaders.Get("X-Thanos-Trace-Id"); traceID != "" {
+		thanosTraceID = traceID
+	}
+
+	var remoteUser = f.remoteUser(r)
+	logMessage := append([]interface{}{
+		"msg", "slow query detected",
+		"method", r.Method,
+		"host", r.Host,
+		"path", r.URL.Path,
+		"remote_user", remoteUser,
+		"remote_addr", r.RemoteAddr,
+		"time_taken", queryResponseTime.String(),
+		"grafana_dashboard_uid", grafanaDashboardUID,
+		"grafana_panel_id", grafanaPanelID,
+		"trace_id", thanosTraceID,
+	}, formatQueryString(queryString)...)
+
+	logMessage = addQueryRangeToLogMessage(logMessage, queryString)
+	logMessage = f.addStatsToLogMessage(logMessage, stats)
+
+	level.Info(util_log.WithContext(r.Context(), f.log)).Log(logMessage...)
 }
 
 func (f *Handler) reportQueryStats(r *http.Request, queryString url.Values, queryResponseTime time.Duration, stats *querier_stats.Stats) {
@@ -321,8 +311,41 @@ func (f *Handler) reportQueryStats(r *http.Request, queryString url.Values, quer
 		"fetched_series_count", numSeries,
 		"fetched_chunks_bytes", numBytes,
 	}, formatQueryString(queryString)...)
+	f.addStatsToLogMessage(logMessage, stats)
+	addQueryRangeToLogMessage(logMessage, queryString)
 
 	level.Info(util_log.WithContext(r.Context(), f.log)).Log(logMessage...)
+}
+
+func (f *Handler) reportQueryLatency(r *http.Request, resHeaders http.Header, responseTime time.Duration, err error) {
+	if !f.cfg.QueryStatsEnabled {
+		return
+	}
+	status := "success"
+	if err != nil {
+		status = "error"
+	}
+	traceId := "-"
+	if traceID := resHeaders.Get("X-Thanos-Trace-Id"); traceID != "" {
+		traceId = traceID
+	}
+
+	var (
+		user, _, _   = r.BasicAuth()
+		emitExemplar = traceId != "-" && (responseTime >= f.cfg.LogQueriesLongerThan || status != "success")
+	)
+
+	if emitExemplar {
+		var (
+			exemplar = prometheus.Labels{
+				"traceID":           traceId,
+				"grafana_dashboard": r.Header.Get("X-Dashboard-Uid"),
+			}
+		)
+		f.queryLatency.WithLabelValues(status, user).(prometheus.ExemplarObserver).ObserveWithExemplar(responseTime.Seconds(), exemplar)
+		return
+	}
+	f.queryLatency.WithLabelValues(status, user).Observe(responseTime.Seconds())
 }
 
 func (f *Handler) parseRequestQueryString(r *http.Request, bodyBuf bytes.Buffer) url.Values {
@@ -339,36 +362,45 @@ func (f *Handler) parseRequestQueryString(r *http.Request, bodyBuf bytes.Buffer)
 	return r.Form
 }
 
-func (f *Handler) reportQueryLatency(r *http.Request, resHeaders http.Header, responseTime time.Duration, err error) {
-	status := "success"
-	if err != nil {
-		status = "error"
-	}
-
-	var (
-		user, _, _        = r.BasicAuth()
-		traceId, hasTrace = getTraceId(resHeaders)
-		emitExemplar      = hasTrace && (f.shouldReportQueryAsSlow(responseTime) || status != "success")
-	)
-	if emitExemplar {
-		var (
-			headerInfo = f.getHeaderInfo(r)
-			exemplar   = prometheus.Labels{"traceID": traceId}
-		)
-		for i := 0; i < len(headerInfo); i += 2 {
-			exemplar[headerInfo[i].(string)] = headerInfo[i+1].(string)
-		}
-		f.queryLatency.WithLabelValues(status, user).(prometheus.ExemplarObserver).ObserveWithExemplar(responseTime.Seconds(), exemplar)
-		return
-	}
-	f.queryLatency.WithLabelValues(status, user).Observe(responseTime.Seconds())
-}
-
 func formatQueryString(queryString url.Values) (fields []interface{}) {
 	for k, v := range queryString {
 		fields = append(fields, fmt.Sprintf("param_%s", k), strings.Join(v, ","))
 	}
 	return fields
+}
+
+func (f *Handler) addStatsToLogMessage(message []interface{}, stats *querier_stats.Stats) []interface{} {
+	if stats != nil {
+		message = append(message, "peak_samples", stats.LoadPeakSamples())
+		message = append(message, "total_samples_loaded", stats.LoadTotalSamples())
+	}
+
+	return message
+}
+
+func addQueryRangeToLogMessage(logMessage []interface{}, queryString url.Values) []interface{} {
+	queryRange := extractQueryRange(queryString)
+	if queryRange != time.Duration(0) {
+		logMessage = append(logMessage, "query_range_hours", int(queryRange.Hours()))
+		logMessage = append(logMessage, "query_range_human", queryRange.String())
+	}
+	return logMessage
+}
+
+// extractQueryRange extracts query range from query string.
+// If start and end are not provided or are invalid, it returns a duration with zero-value.
+func extractQueryRange(queryString url.Values) time.Duration {
+	startStr := queryString.Get("start")
+	endStr := queryString.Get("end")
+	var queryRange = time.Duration(0)
+	if startStr != "" && endStr != "" {
+		start, serr := util.ParseTime(startStr)
+		end, eerr := util.ParseTime(endStr)
+		if serr == nil && eerr == nil {
+			queryRange = time.Duration(end-start) * time.Millisecond
+		}
+	}
+	return queryRange
 }
 
 func writeError(w http.ResponseWriter, err error) {
@@ -390,6 +422,8 @@ func writeServiceTimingHeader(queryResponseTime time.Duration, headers http.Head
 		parts := make([]string, 0)
 		parts = append(parts, statsValue("querier_wall_time", stats.LoadWallTime()))
 		parts = append(parts, statsValue("response_time", queryResponseTime))
+		parts = append(parts, statsValue("loaded_samples_total", time.Duration(stats.LoadTotalSamples())))
+		parts = append(parts, statsValue("loaded_samples_peak", time.Duration(stats.LoadPeakSamples())))
 		headers.Set(ServiceTimingHeaderName, strings.Join(parts, ", "))
 	}
 }

@@ -85,5 +85,13 @@ jobs:
           check-latest: true
           cache-dependency-path: "**/*.sum"
 
+      - uses: actions/cache@e12d46a63a90f2fae62d114769bbf2a179198b5c # v3.3.3
+        with:
+          path: |
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
       - name: Run unit tests (without e2e tests against all real store buckets)
         run: make test

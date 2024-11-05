@@ -4,10 +4,13 @@ type: go
 
 up:
   - go:
-      version: 1.21.10
+      version: 1.23.2
       modules: true
   - node:
-      version: v20.9.0
+      version: v20.18.0
+      packages:
+        - ./pkg/ui/react-app
+
 
 # `dev run` runs `dev build` and then `dev run-built` if these are both defined.
 commands:

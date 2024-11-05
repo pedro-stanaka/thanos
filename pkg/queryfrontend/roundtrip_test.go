@@ -13,13 +13,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/efficientgo/core/testutil"
 	"github.com/go-kit/log"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/promql/parser"
 	"github.com/weaveworks/common/user"
 
-	"github.com/efficientgo/core/testutil"
 	cortexcache "github.com/thanos-io/thanos/internal/cortex/chunk/cache"
 	"github.com/thanos-io/thanos/internal/cortex/cortexpb"
 	"github.com/thanos-io/thanos/internal/cortex/querier/queryrange"
@@ -597,7 +597,7 @@ func TestRoundTripQueryCacheWithShardingMiddleware(t *testing.T) {
 			expected: 5,
 		},
 	} {
-		if !t.Run(tc.name, func(t *testing.T) {
+		t.Run(tc.name, func(t *testing.T) {
 			ctx := user.InjectOrgID(context.Background(), "1")
 			httpReq, err := NewThanosQueryRangeCodec(true).EncodeRequest(ctx, tc.req)
 			testutil.Ok(t, err)
@@ -610,9 +610,7 @@ func TestRoundTripQueryCacheWithShardingMiddleware(t *testing.T) {
 			}
 
 			testutil.Equals(t, tc.expected, *res)
-		}) {
-			break
-		}
+		})
 	}
 }
 
@@ -903,7 +901,7 @@ func promqlResultsWithFailures(numFailures int) (*int, http.Handler) {
 			if numFailures == 0 {
 				lock.Unlock()
 				cond.Wait()
-				<-time.After(500 * time.Millisecond)
+				<-time.After(800 * time.Millisecond)
 				lock.Lock()
 			}
 			w.WriteHeader(500)
