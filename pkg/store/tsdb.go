@@ -196,18 +196,30 @@ func (s *TSDBStore) Series(r *storepb.SeriesRequest, srv storepb.Store_SeriesSer
 	hasher := hashPool.Get().(hash.Hash64)
 	defer hashPool.Put(hasher)
 
-	builder := labels.NewBuilder(labels.EmptyLabels())
+	var (
+		withoutLabels = make(map[string]struct{})
+		lblsScratch   []labelpb.ZLabel
+	)
+	for _, lbl := range r.WithoutReplicaLabels {
+		withoutLabels[lbl] = struct{}{}
+	}
 	// Stream at most one series per frame; series may be split over multiple frames according to maxBytesInFrame.
 	for set.Next() {
 		series := set.At()
 
-		writeLabelsToBuilder(builder, series.Labels(), s.getExtLabelsSlice())
-		builder.Del(r.WithoutReplicaLabels...)
-		if !shardMatcher.MatchesLabels(builder) {
+		lbls := buildSeriesLabels(
+			lblsScratch,
+			series.Labels(),
+			s.getExtLabelsSlice(),
+			withoutLabels,
+		)
+		if !shardMatcher.MatchesZLabels(lbls) {
 			continue
 		}
 
-		storeSeries := storepb.Series{Labels: labelpb.ZLabelsFromPromLabels(builder.Labels())}
+		lblsCopy := make([]labelpb.ZLabel, len(lbls))
+		copy(lblsCopy, lbls)
+		storeSeries := storepb.Series{Labels: lblsCopy}
 		if r.SkipChunks {
 			if err := srv.Send(storepb.NewSeriesResponse(&storeSeries)); err != nil {
 				return status.Error(codes.Aborted, err.Error())
@@ -274,20 +286,27 @@ func (s *TSDBStore) Series(r *storepb.SeriesRequest, srv storepb.Store_SeriesSer
 	return nil
 }
 
-func writeLabelsToBuilder(builder *labels.Builder, seriesLabels labels.Labels, extLabels []labels.Label) {
-	builder.Reset(nil)
+func buildSeriesLabels(lbls []labelpb.ZLabel, seriesLabels labels.Labels, extLabels []labels.Label, withoutLabels map[string]struct{}) []labelpb.ZLabel {
+	lbls = lbls[:0]
 	iExt := 0
 	seriesLabels.Range(func(l labels.Label) {
 		for iExt < len(extLabels) && strings.Compare(extLabels[iExt].Name, l.Name) < 0 {
 			extLbl := extLabels[iExt]
-			builder.Set(extLbl.Name, extLbl.Value)
+			if _, ok := withoutLabels[extLbl.Name]; !ok {
+				lbls = append(lbls, labelpb.ZLabel{Name: extLbl.Name, Value: extLbl.Value})
+			}
 			iExt++
 		}
-		builder.Set(l.Name, l.Value)
+		if _, ok := withoutLabels[l.Name]; !ok {
+			lbls = append(lbls, labelpb.ZLabel{Name: l.Name, Value: l.Value})
+		}
 	})
-	for _, lbl := range extLabels[iExt:] {
-		builder.Set(lbl.Name, lbl.Value)
+	for _, l := range extLabels[iExt:] {
+		if _, ok := withoutLabels[l.Name]; !ok {
+			lbls = append(lbls, labelpb.ZLabel{Name: l.Name, Value: l.Value})
+		}
 	}
+	return lbls
 }
 
 // GuaranteedMinTime returns the minimum timestamp in milliseconds that will always be present in a TSDB.
