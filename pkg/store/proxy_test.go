@@ -1732,6 +1732,18 @@ func seriesEquals(t *testing.T, expected []rawSeries, got []storepb.Series) {
 	}
 }
 
+var buffersPool = &sync.Pool{New: func() interface{} {
+	b := make([]byte, 0, initialBufSize)
+	return &b
+}}
+
+func assertSeriesMatchShard(t *testing.T, set []storepb.Series, info *storepb.ShardInfo) {
+	matcher := info.Matcher(buffersPool)
+	for _, series := range set {
+		testutil.Assert(t, matcher.MatchesZLabels(series.Labels))
+	}
+}
+
 func TestStoreMatches(t *testing.T) {
 	for _, c := range []struct {
 		s          Client

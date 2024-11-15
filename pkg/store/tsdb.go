@@ -43,9 +43,9 @@ type TSDBStore struct {
 	db        TSDBReader
 	component component.StoreAPI
 
-	extLset       labels.Labels
-	extLsetString string
-	extLabelsMap  map[string]struct{}
+	extLset        labels.Labels
+	extLsetString  string
+	extLabelsSlice []labels.Label
 
 	buffers          sync.Pool
 	maxBytesPerFrame int
@@ -77,7 +77,7 @@ func NewTSDBStore(logger log.Logger, db TSDBReader, component component.StoreAPI
 		component:        component,
 		extLset:          extLset,
 		extLsetString:    extLset.String(),
-		extLabelsMap:     labelsToMap(extLset),
+		extLabelsSlice:   labelsToSlice(extLset),
 		maxBytesPerFrame: RemoteReadFrameLimit,
 		buffers: sync.Pool{New: func() interface{} {
 			b := make([]byte, 0, initialBufSize)
@@ -92,6 +92,7 @@ func (s *TSDBStore) SetExtLset(extLset labels.Labels) {
 
 	s.extLset = extLset
 	s.extLsetString = extLset.String()
+	s.extLabelsSlice = labelsToSlice(extLset)
 }
 
 func (s *TSDBStore) getExtLset() labels.Labels {
@@ -99,6 +100,13 @@ func (s *TSDBStore) getExtLset() labels.Labels {
 	defer s.mtx.RUnlock()
 
 	return s.extLset
+}
+
+func (s *TSDBStore) getExtLabelsSlice() []labels.Label {
+	s.mtx.RLock()
+	defer s.mtx.RUnlock()
+
+	return s.extLabelsSlice
 }
 
 func (s *TSDBStore) LabelSet() []labels.Labels {
@@ -193,12 +201,8 @@ func (s *TSDBStore) Series(r *storepb.SeriesRequest, srv storepb.Store_SeriesSer
 	for set.Next() {
 		series := set.At()
 
-		builder.Reset(series.Labels())
-		s.extLset.Range(func(l labels.Label) {
-			builder.Set(l.Name, l.Value)
-		})
+		writeLabelsToBuilder(builder, series.Labels(), s.getExtLabelsSlice())
 		builder.Del(r.WithoutReplicaLabels...)
-
 		if !shardMatcher.MatchesLabels(builder) {
 			continue
 		}
@@ -268,6 +272,21 @@ func (s *TSDBStore) Series(r *storepb.SeriesRequest, srv storepb.Store_SeriesSer
 		}
 	}
 	return nil
+}
+
+func writeLabelsToBuilder(builder *labels.Builder, seriesLabels labels.Labels, extLabels []labels.Label) {
+	iExt := 0
+	seriesLabels.Range(func(l labels.Label) {
+		for iExt < len(extLabels) && strings.Compare(extLabels[iExt].Name, l.Name) < 0 {
+			extLbl := extLabels[iExt]
+			builder.Set(extLbl.Name, extLbl.Value)
+			iExt++
+		}
+		builder.Set(l.Name, l.Value)
+	})
+	for _, lbl := range extLabels[iExt:] {
+		builder.Set(lbl.Name, lbl.Value)
+	}
 }
 
 // GuaranteedMinTime returns the minimum timestamp in milliseconds that will always be present in a TSDB.
@@ -388,10 +407,10 @@ func (s *TSDBStore) LabelValues(ctx context.Context, r *storepb.LabelValuesReque
 	return &storepb.LabelValuesResponse{Values: values}, nil
 }
 
-func labelsToMap(lset labels.Labels) map[string]struct{} {
-	r := make(map[string]struct{}, lset.Len())
+func labelsToSlice(lset labels.Labels) []labels.Label {
+	r := make([]labels.Label, 0, lset.Len())
 	lset.Range(func(l labels.Label) {
-		r[l.Name] = struct{}{}
+		r = append(r, l)
 	})
 	return r
 }
