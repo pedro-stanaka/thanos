@@ -275,6 +275,7 @@ func (s *TSDBStore) Series(r *storepb.SeriesRequest, srv storepb.Store_SeriesSer
 }
 
 func writeLabelsToBuilder(builder *labels.Builder, seriesLabels labels.Labels, extLabels []labels.Label) {
+	builder.Reset(nil)
 	iExt := 0
 	seriesLabels.Range(func(l labels.Label) {
 		for iExt < len(extLabels) && strings.Compare(extLabels[iExt].Name, l.Name) < 0 {
