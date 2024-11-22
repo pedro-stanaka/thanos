@@ -86,7 +86,7 @@ func RunDownsample(
 		return err
 	}
 
-	bkt, err := client.NewBucket(logger, confContentYaml, component.Downsample.String())
+	bkt, err := client.NewBucket(logger, confContentYaml, component.Downsample.String(), nil)
 	if err != nil {
 		return err
 	}
