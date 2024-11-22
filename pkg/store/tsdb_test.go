@@ -224,8 +224,74 @@ func TestTSDBStore_Series(t *testing.T) {
 				{lset: unsortedLabelsFromStrings("a", "2", "region", "eu-west", "z", "2")},
 			},
 		},
+		{
+			name: "sharding with ext label at beginning of labelset",
+			series: []labels.Labels{
+				labels.FromStrings("y", "1", "z", "1"),
+			},
+			req: &storepb.SeriesRequest{
+				MinTime: 1,
+				MaxTime: 3,
+				Matchers: []storepb.LabelMatcher{
+					{Type: storepb.LabelMatcher_RE, Name: "y", Value: ".+"},
+				},
+				SkipChunks: true,
+				ShardInfo: &storepb.ShardInfo{
+					ShardIndex:  0,
+					TotalShards: 2,
+				},
+				WithoutReplicaLabels: []string{"ext1"},
+			},
+			expectedSeries: []rawSeries{
+				{lset: unsortedLabelsFromStrings("region", "eu-west", "y", "1", "z", "1")},
+			},
+		},
+		{
+			name: "sharding with ext label in middle of labelset",
+			series: []labels.Labels{
+				labels.FromStrings("a", "2", "z", "1"),
+			},
+			req: &storepb.SeriesRequest{
+				MinTime: 1,
+				MaxTime: 3,
+				Matchers: []storepb.LabelMatcher{
+					{Type: storepb.LabelMatcher_RE, Name: "a", Value: ".+"},
+				},
+				SkipChunks: true,
+				ShardInfo: &storepb.ShardInfo{
+					ShardIndex:  1,
+					TotalShards: 2,
+				},
+				WithoutReplicaLabels: []string{"ext1"},
+			},
+			expectedSeries: []rawSeries{
+				{lset: unsortedLabelsFromStrings("a", "2", "region", "eu-west", "z", "1")},
+			},
+		},
+		{
+			name: "sharding with ext label at end of labelset",
+			series: []labels.Labels{
+				labels.FromStrings("a", "1", "b", "1"),
+			},
+			req: &storepb.SeriesRequest{
+				MinTime: 1,
+				MaxTime: 3,
+				Matchers: []storepb.LabelMatcher{
+					{Type: storepb.LabelMatcher_RE, Name: "a", Value: ".+"},
+				},
+				SkipChunks: true,
+				ShardInfo: &storepb.ShardInfo{
+					ShardIndex:  0,
+					TotalShards: 2,
+				},
+				WithoutReplicaLabels: []string{"ext1"},
+			},
+			expectedSeries: []rawSeries{
+				{lset: unsortedLabelsFromStrings("a", "1", "b", "1", "region", "eu-west")},
+			},
+		},
 	} {
-		if ok := t.Run(tc.name, func(t *testing.T) {
+		t.Run(tc.name, func(t *testing.T) {
 			db, err := e2eutil.NewTSDB()
 			defer func() { testutil.Ok(t, db.Close()) }()
 			testutil.Ok(t, err)
@@ -249,13 +315,13 @@ func TestTSDBStore_Series(t *testing.T) {
 			if len(tc.expectedError) > 0 {
 				testutil.NotOk(t, err)
 				testutil.Equals(t, tc.expectedError, err.Error())
-			} else {
-				testutil.Ok(t, err)
-				seriesEquals(t, tc.expectedSeries, srv.SeriesSet)
+				return
 			}
-		}); !ok {
-			return
-		}
+
+			testutil.Ok(t, err)
+			seriesEquals(t, tc.expectedSeries, srv.SeriesSet)
+			assertSeriesMatchShard(t, srv.SeriesSet, tc.req.ShardInfo)
+		})
 	}
 }
 

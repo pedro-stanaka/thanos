@@ -43,9 +43,9 @@ type TSDBStore struct {
 	db        TSDBReader
 	component component.StoreAPI
 
-	extLset       labels.Labels
-	extLsetString string
-	extLabelsMap  map[string]struct{}
+	extLset        labels.Labels
+	extLsetString  string
+	extLabelsSlice []labels.Label
 
 	buffers          sync.Pool
 	maxBytesPerFrame int
@@ -77,7 +77,7 @@ func NewTSDBStore(logger log.Logger, db TSDBReader, component component.StoreAPI
 		component:        component,
 		extLset:          extLset,
 		extLsetString:    extLset.String(),
-		extLabelsMap:     labelsToMap(extLset),
+		extLabelsSlice:   labelsToSlice(extLset),
 		maxBytesPerFrame: RemoteReadFrameLimit,
 		buffers: sync.Pool{New: func() interface{} {
 			b := make([]byte, 0, initialBufSize)
@@ -92,6 +92,7 @@ func (s *TSDBStore) SetExtLset(extLset labels.Labels) {
 
 	s.extLset = extLset
 	s.extLsetString = extLset.String()
+	s.extLabelsSlice = labelsToSlice(extLset)
 }
 
 func (s *TSDBStore) getExtLset() labels.Labels {
@@ -99,6 +100,13 @@ func (s *TSDBStore) getExtLset() labels.Labels {
 	defer s.mtx.RUnlock()
 
 	return s.extLset
+}
+
+func (s *TSDBStore) getExtLabelsSlice() []labels.Label {
+	s.mtx.RLock()
+	defer s.mtx.RUnlock()
+
+	return s.extLabelsSlice
 }
 
 func (s *TSDBStore) LabelSet() []labels.Labels {
@@ -188,22 +196,30 @@ func (s *TSDBStore) Series(r *storepb.SeriesRequest, srv storepb.Store_SeriesSer
 	hasher := hashPool.Get().(hash.Hash64)
 	defer hashPool.Put(hasher)
 
-	builder := labels.NewBuilder(labels.EmptyLabels())
+	var (
+		withoutLabels = make(map[string]struct{})
+		lblsScratch   []labelpb.ZLabel
+	)
+	for _, lbl := range r.WithoutReplicaLabels {
+		withoutLabels[lbl] = struct{}{}
+	}
 	// Stream at most one series per frame; series may be split over multiple frames according to maxBytesInFrame.
 	for set.Next() {
 		series := set.At()
 
-		builder.Reset(series.Labels())
-		s.extLset.Range(func(l labels.Label) {
-			builder.Set(l.Name, l.Value)
-		})
-		builder.Del(r.WithoutReplicaLabels...)
-
-		if !shardMatcher.MatchesLabels(builder) {
+		lbls := buildSeriesLabels(
+			lblsScratch,
+			series.Labels(),
+			s.getExtLabelsSlice(),
+			withoutLabels,
+		)
+		if !shardMatcher.MatchesZLabels(lbls) {
 			continue
 		}
 
-		storeSeries := storepb.Series{Labels: labelpb.ZLabelsFromPromLabels(builder.Labels())}
+		lblsCopy := make([]labelpb.ZLabel, len(lbls))
+		copy(lblsCopy, lbls)
+		storeSeries := storepb.Series{Labels: lblsCopy}
 		if r.SkipChunks {
 			if err := srv.Send(storepb.NewSeriesResponse(&storeSeries)); err != nil {
 				return status.Error(codes.Aborted, err.Error())
@@ -268,6 +284,29 @@ func (s *TSDBStore) Series(r *storepb.SeriesRequest, srv storepb.Store_SeriesSer
 		}
 	}
 	return nil
+}
+
+func buildSeriesLabels(lbls []labelpb.ZLabel, seriesLabels labels.Labels, extLabels []labels.Label, withoutLabels map[string]struct{}) []labelpb.ZLabel {
+	lbls = lbls[:0]
+	iExt := 0
+	seriesLabels.Range(func(l labels.Label) {
+		for iExt < len(extLabels) && strings.Compare(extLabels[iExt].Name, l.Name) < 0 {
+			extLbl := extLabels[iExt]
+			if _, ok := withoutLabels[extLbl.Name]; !ok {
+				lbls = append(lbls, labelpb.ZLabel{Name: extLbl.Name, Value: extLbl.Value})
+			}
+			iExt++
+		}
+		if _, ok := withoutLabels[l.Name]; !ok {
+			lbls = append(lbls, labelpb.ZLabel{Name: l.Name, Value: l.Value})
+		}
+	})
+	for _, l := range extLabels[iExt:] {
+		if _, ok := withoutLabels[l.Name]; !ok {
+			lbls = append(lbls, labelpb.ZLabel{Name: l.Name, Value: l.Value})
+		}
+	}
+	return lbls
 }
 
 // GuaranteedMinTime returns the minimum timestamp in milliseconds that will always be present in a TSDB.
@@ -388,10 +427,10 @@ func (s *TSDBStore) LabelValues(ctx context.Context, r *storepb.LabelValuesReque
 	return &storepb.LabelValuesResponse{Values: values}, nil
 }
 
-func labelsToMap(lset labels.Labels) map[string]struct{} {
-	r := make(map[string]struct{}, lset.Len())
+func labelsToSlice(lset labels.Labels) []labels.Label {
+	r := make([]labels.Label, 0, lset.Len())
 	lset.Range(func(l labels.Label) {
-		r[l.Name] = struct{}{}
+		r = append(r, l)
 	})
 	return r
 }
