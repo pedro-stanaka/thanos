@@ -52,8 +52,16 @@ func (b *erroringBucket) ReaderWithExpectedErrs(f objstore.IsOpFailureExpectedFu
 	return b.bkt.ReaderWithExpectedErrs(f)
 }
 
+func (b *erroringBucket) SupportedIterOptions() []objstore.IterOptionType {
+	return b.bkt.SupportedIterOptions()
+}
+
 func (b *erroringBucket) Iter(ctx context.Context, dir string, f func(string) error, options ...objstore.IterOption) error {
 	return b.bkt.Iter(ctx, dir, f, options...)
+}
+
+func (b *erroringBucket) IterWithAttributes(ctx context.Context, dir string, f func(attrs objstore.IterObjectAttributes) error, options ...objstore.IterOption) error {
+	return b.bkt.IterWithAttributes(ctx, dir, f, options...)
 }
 
 // Get returns a reader for the given object name.

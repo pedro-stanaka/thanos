@@ -399,7 +399,7 @@ func TestQueryStoreMetrics(t *testing.T) {
 	testutil.Ok(t, e2e.StartAndWaitReady(minio))
 
 	l := log.NewLogfmtLogger(os.Stdout)
-	bkt, err := s3.NewBucketWithConfig(l, e2ethanos.NewS3Config(bucket, minio.Endpoint("http"), minio.Dir()), "test")
+	bkt, err := s3.NewBucketWithConfig(l, e2ethanos.NewS3Config(bucket, minio.Endpoint("http"), minio.Dir()), "test", nil)
 	testutil.Ok(t, err)
 
 	// Preparing 3 different blocks for the tests.
@@ -569,7 +569,7 @@ func TestSidecarStorePushdown(t *testing.T) {
 	testutil.Ok(t, err)
 
 	l := log.NewLogfmtLogger(os.Stdout)
-	bkt, err := s3.NewBucketWithConfig(l, e2ethanos.NewS3Config(bucket, m.Endpoint("http"), m.Dir()), "test")
+	bkt, err := s3.NewBucketWithConfig(l, e2ethanos.NewS3Config(bucket, m.Endpoint("http"), m.Dir()), "test", nil)
 	testutil.Ok(t, err)
 	testutil.Ok(t, objstore.UploadDir(ctx, l, bkt, path.Join(dir, id1.String()), id1.String()))
 
@@ -673,7 +673,7 @@ func TestQueryStoreDedup(t *testing.T) {
 	testutil.Ok(t, e2e.StartAndWaitReady(minio))
 
 	l := log.NewLogfmtLogger(os.Stdout)
-	bkt, err := s3.NewBucketWithConfig(l, e2ethanos.NewS3Config(bucket, minio.Endpoint("http"), minio.Dir()), "test")
+	bkt, err := s3.NewBucketWithConfig(l, e2ethanos.NewS3Config(bucket, minio.Endpoint("http"), minio.Dir()), "test", nil)
 	testutil.Ok(t, err)
 
 	storeGW := e2ethanos.NewStoreGW(
@@ -1465,7 +1465,8 @@ func storeWriteRequest(ctx context.Context, rawRemoteWriteURL string, req *promp
 	}
 
 	compressed := snappy.Encode(buf, pBuf.Bytes())
-	return client.Store(ctx, compressed, 0)
+	_, err = client.Store(ctx, compressed, 0)
+	return err
 }
 
 func TestSidecarQueryEvaluationWithDedup(t *testing.T) {

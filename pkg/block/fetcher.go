@@ -380,7 +380,7 @@ func (f *BaseFetcher) fetchMetadata(ctx context.Context) (interface{}, error) {
 			}
 
 			return nil
-		}, objstore.WithRecursiveIter)
+		}, objstore.WithRecursiveIter())
 	})
 
 	if err := eg.Wait(); err != nil {

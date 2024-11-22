@@ -66,6 +66,7 @@ config:
   bucket: ""
   endpoint: ""
   region: ""
+  disable_dualstack: false
   aws_sdk_auth: false
   access_key: ""
   insecure: false
@@ -94,6 +95,7 @@ config:
   list_objects_version: ""
   bucket_lookup_type: auto
   send_content_md5: true
+  disable_multipart: false
   part_size: 67108864
   sse_config:
     type: ""
@@ -101,6 +103,7 @@ config:
     kms_encryption_context: {}
     encryption_key: ""
   sts_endpoint: ""
+  max_retries: 0
 prefix: ""
 ```
 
@@ -302,6 +305,8 @@ config:
       server_name: ""
       insecure_skip_verify: false
     disable_compression: false
+  chunk_size_bytes: 0
+  max_retries: 0
 prefix: ""
 ```
 
@@ -377,6 +382,7 @@ config:
   storage_account: ""
   storage_account_key: ""
   storage_connection_string: ""
+  storage_create_container: false
   container: ""
   endpoint: ""
   user_assigned_id: ""
@@ -491,6 +497,7 @@ config:
   endpoint: ""
   secret_key: ""
   secret_id: ""
+  max_retries: 0
   http_config:
     idle_conn_timeout: 1m30s
     response_header_timeout: 2m
