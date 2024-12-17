@@ -572,6 +572,8 @@ Flags:
                                 detected maximum container or system memory.
       --compaction=1... ...     Only blocks with these compaction levels will be
                                 replicated. Repeated flag.
+      --concurrency=1           The concurrency with which to replicate blocks
+                                from the source to the destination bucket.
       --enable-auto-gomemlimit  Enable go runtime to automatically limit memory
                                 consumption.
   -h, --help                    Show context-sensitive help (also try

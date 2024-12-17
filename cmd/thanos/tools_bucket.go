@@ -124,6 +124,7 @@ type bucketWebConfig struct {
 type bucketReplicateConfig struct {
 	resolutions []time.Duration
 	compactions []int
+	concurrency int
 	matcherStrs string
 	singleRun   bool
 }
@@ -207,6 +208,8 @@ func (tbc *bucketReplicateConfig) registerBucketReplicateFlag(cmd extkingpin.Fla
 	cmd.Flag("resolution", "Only blocks with these resolutions will be replicated. Repeated flag.").Default("0s", "5m", "1h").HintAction(listResLevel).DurationListVar(&tbc.resolutions)
 
 	cmd.Flag("compaction", "Only blocks with these compaction levels will be replicated. Repeated flag.").Default("1", "2", "3", "4").IntsVar(&tbc.compactions)
+
+	cmd.Flag("concurrency", "The concurrency with which to replicate blocks from the source to the destination bucket.").Default("1").IntVar(&tbc.concurrency)
 
 	cmd.Flag("matcher", "blocks whose external labels match this matcher will be replicated. All Prometheus matchers are supported, including =, !=, =~ and !~.").StringVar(&tbc.matcherStrs)
 
@@ -737,6 +740,7 @@ func registerBucketReplicate(app extkingpin.AppClause, objStoreConfig *extflag.P
 			matchers,
 			resolutionLevels,
 			tbc.compactions,
+			tbc.concurrency,
 			objStoreConfig,
 			toObjStoreConfig,
 			tbc.singleRun,
