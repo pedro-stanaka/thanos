@@ -117,6 +117,7 @@ require (
 require (
 	capnproto.org/go/capnp/v3 v3.0.0-alpha.30
 	github.com/KimMachineGun/automemlimit v0.6.1
+	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/onsi/gomega v1.34.0
 	go.opentelemetry.io/contrib/propagators/autoprop v0.54.0
 	go4.org/intern v0.0.0-20230525184215-6c62f75575cb

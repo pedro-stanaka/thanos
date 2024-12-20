@@ -56,7 +56,7 @@ export GO111MODULE
 GOPROXY           ?= https://proxy.golang.org
 export GOPROXY
 
-GOTEST_OPTS ?= -failfast -timeout 15m -v
+GOTEST_OPTS ?= -failfast -timeout 10m -v
 BIN_DIR ?= $(shell pwd)/tmp/bin
 OS ?= $(shell uname -s | tr '[A-Z]' '[a-z]')
 ARCH ?= $(shell uname -m)
@@ -118,14 +118,12 @@ $(REACT_APP_OUTPUT_DIR): $(REACT_APP_NODE_MODULES_PATH) $(REACT_APP_SOURCE_FILES
 	   @echo ">> building React app"
 	   @scripts/build-react-app.sh
 
-.PHONY: assets
-assets: # Repacks all static assets into go file for easier deploy.
-assets: $(GO_BINDATA) $(REACT_APP_OUTPUT_DIR)
-	@echo ">> deleting asset file"
-	@rm pkg/ui/bindata.go || true
-	@echo ">> writing assets"
-	@$(GO_BINDATA) $(bindata_flags) -pkg ui -o pkg/ui/bindata.go  pkg/ui/static/...
-	@$(MAKE) format
+.PHONY: react-app
+react-app: $(REACT_APP_OUTPUT_DIR)
+
+.PHONY: check-react-app
+check-react-app: react-app
+	$(call require_clean_work_tree,'all generated files should be committed, run make react-app and commit changes.')
 
 .PHONY: react-app-lint
 react-app-lint: $(REACT_APP_NODE_MODULES_PATH)
@@ -133,7 +131,7 @@ react-app-lint: $(REACT_APP_NODE_MODULES_PATH)
 	   cd $(REACT_APP_PATH) && npm run lint:ci
 
 .PHONY: react-app-lint-fix
-react-app-lint-fix:
+react-app-lint-fix: $(REACT_APP_NODE_MODULES_PATH)
 	@echo ">> running React app linting and fixing errors where possible"
 	cd $(REACT_APP_PATH) && npm run lint
 
@@ -151,7 +149,7 @@ react-app-start: $(REACT_APP_NODE_MODULES_PATH)
 build: ## Builds Thanos binary using `promu`.
 build: check-git deps $(PROMU)
 	@echo ">> building Thanos binary in $(PREFIX)"
-	@$(PROMU) build all -v --prefix $(PREFIX)
+	@$(PROMU) build --prefix $(PREFIX)
 
 .PHONY: build-stringlabels
 build-stringlabels: ## Builds Thanos binary using `promu`.
@@ -231,6 +229,12 @@ docker-test: $(TEST_DOCKER_ARCHS)
 $(TEST_DOCKER_ARCHS): docker-test-%:
 	@echo ">> testing image"
 	@docker run "thanos-linux-$*" --help
+
+.PHONY: docker-e2e
+docker-e2e: ## Builds 'thanos' docker for e2e tests
+docker-e2e:
+	@echo ">> building docker image 'thanos' with Dockerfile.e2e-tests"
+	@docker build -f Dockerfile.e2e-tests -t "thanos" .
 
 # docker-manifest push docker manifest to support multiple architectures.
 .PHONY: docker-manifest
@@ -320,7 +324,7 @@ test: export THANOS_TEST_PROMETHEUS_PATHS= $(PROMETHEUS)
 test: export THANOS_TEST_ALERTMANAGER_PATH= $(ALERTMANAGER)
 test: check-git install-tool-deps
 	@echo ">> install thanos GOOPTS=${GOOPTS}"
-	@echo ">> running unit tests (without /test/e2e). Do export THANOS_TEST_OBJSTORE_SKIP=GCS,S3,AZURE,SWIFT,COS,ALIYUNOSS,BOS,OCI if you want to skip e2e tests against all real store buckets. Current value: ${THANOS_TEST_OBJSTORE_SKIP}"
+	@echo ">> running unit tests (without /test/e2e). Do export THANOS_TEST_OBJSTORE_SKIP=GCS,S3,AZURE,SWIFT,COS,ALIYUNOSS,BOS,OCI,OBS if you want to skip e2e tests against all real store buckets. Current value: ${THANOS_TEST_OBJSTORE_SKIP}"
 	@go test -timeout 15m $(shell go list ./... | grep -v /vendor/ | grep -v /test/e2e | grep -v /internal/mimir-prometheus);
 
 .PHONY: test-local
@@ -339,7 +343,14 @@ test-e2e: docker $(GOTESPLIT)
 	@echo ">> running /test/e2e tests."
 	# NOTE(bwplotka):
 	# * If you see errors on CI (timeouts), but not locally, try to add -parallel 1 (Wiard note: to the GOTEST_OPTS arg) to limit to single CPU to reproduce small 1CPU machine.
-	@$(GOTESPLIT) -total ${GH_PARALLEL} -index ${GH_INDEX} ./test/e2e/... -- ${GOTEST_OPTS}
+	# NOTE(GiedriusS):
+	# * If you want to limit CPU time available in e2e tests then pass E2E_DOCKER_CPUS environment variable. For example, E2E_DOCKER_CPUS=0.05 limits CPU time available
+	#   to spawned Docker containers to 0.05 cores.
+	@if [ -n "$(SINGLE_E2E_TEST)" ]; then \
+        $(GOTESPLIT) -total ${GH_PARALLEL} -index ${GH_INDEX} ./test/e2e -- -run $(SINGLE_E2E_TEST) ${GOTEST_OPTS}; \
+    else \
+        $(GOTESPLIT) -total ${GH_PARALLEL} -index ${GH_INDEX} ./test/e2e/... -- ${GOTEST_OPTS}; \
+    fi
 
 .PHONY: test-e2e-local
 test-e2e-local: ## Runs all thanos e2e tests locally.
@@ -409,10 +420,10 @@ NewHistorgram,NewHistogramVec,NewSummary,NewSummaryVec}=github.com/prometheus/cl
 NewCounterVec,NewCounterVec,NewGauge,NewGaugeVec,NewGaugeFunc,NewHistorgram,NewHistogramVec,NewSummary,NewSummaryVec},\
 github.com/NYTimes/gziphandler.{GzipHandler}=github.com/klauspost/compress/gzhttp.{GzipHandler},\
 sync/atomic=go.uber.org/atomic,github.com/cortexproject/cortex=github.com/thanos-io/thanos/internal/cortex,\
-io/ioutil.{Discard,NopCloser,ReadAll,ReadDir,ReadFile,TempDir,TempFile,Writefile}" $(shell go list ./... | grep -v -e "internal/cortex" -e "internal/mimir-prometheus")
+io/ioutil.{Discard,NopCloser,ReadAll,ReadDir,ReadFile,TempDir,TempFile,Writefile}" $(shell go list ./... | grep -v "internal/cortex" | grep -v "internal/mimir-prometheus")
 	@$(FAILLINT) -paths "fmt.{Print,Println,Sprint}" -ignore-tests ./...
 	@echo ">> linting all of the Go files GOGC=${GOGC}"
-	@$(GOLANGCI_LINT) run --timeout=10m
+	@$(GOLANGCI_LINT) run --timeout 15m
 	@echo ">> ensuring Copyright headers"
 	@go run ./scripts/copyright
 	@echo ">> ensuring generated proto files are up to date"
