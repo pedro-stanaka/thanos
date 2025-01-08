@@ -289,16 +289,29 @@ func (s *TSDBStore) Series(r *storepb.SeriesRequest, srv storepb.Store_SeriesSer
 func buildSeriesLabels(lbls []labelpb.ZLabel, seriesLabels labels.Labels, extLabels []labels.Label, withoutLabels map[string]struct{}) []labelpb.ZLabel {
 	lbls = lbls[:0]
 	iExt := 0
-	seriesLabels.Range(func(l labels.Label) {
-		for iExt < len(extLabels) && strings.Compare(extLabels[iExt].Name, l.Name) < 0 {
-			extLbl := extLabels[iExt]
-			if _, ok := withoutLabels[extLbl.Name]; !ok {
-				lbls = append(lbls, labelpb.ZLabel{Name: extLbl.Name, Value: extLbl.Value})
+	seriesLabels.Range(func(intLbl labels.Label) {
+	extLoop:
+		for iExt < len(extLabels) {
+			cmp := strings.Compare(extLabels[iExt].Name, intLbl.Name)
+			if cmp < 1 {
+				extLbl := extLabels[iExt]
+				if _, ok := withoutLabels[extLbl.Name]; !ok {
+					lbls = append(lbls, labelpb.ZLabel{Name: extLbl.Name, Value: extLbl.Value})
+				}
+				iExt++
 			}
-			iExt++
+			// If the current internal label is identical to the external label, move over to
+			// the next internal label to avoid duplicates.
+			// Otherwise, move over to adding internal labels.
+			switch cmp {
+			case 0:
+				return
+			case 1:
+				break extLoop
+			}
 		}
-		if _, ok := withoutLabels[l.Name]; !ok {
-			lbls = append(lbls, labelpb.ZLabel{Name: l.Name, Value: l.Value})
+		if _, ok := withoutLabels[intLbl.Name]; !ok {
+			lbls = append(lbls, labelpb.ZLabel{Name: intLbl.Name, Value: intLbl.Value})
 		}
 	})
 	for _, l := range extLabels[iExt:] {
