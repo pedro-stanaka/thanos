@@ -245,8 +245,9 @@ func runQueryFrontend(
 			return errors.Wrap(err, "initializing the labels cache config")
 		}
 		cfg.LabelsConfig.ResultsCacheConfig = &queryrange.ResultsCacheConfig{
-			Compression: cfg.CacheCompression,
-			CacheConfig: *cacheConfig,
+			Compression:                cfg.CacheCompression,
+			CacheConfig:                *cacheConfig,
+			CacheQueryableSamplesStats: cfg.CortexHandlerConfig.QueryStatsEnabled,
 		}
 	}
 
