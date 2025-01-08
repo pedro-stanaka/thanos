@@ -2,6 +2,10 @@ name: thanos
 
 type: go
 
+check:
+  lint: make go-lint
+  test: make test-local
+
 up:
   - go:
       version: 1.23.2

@@ -89,6 +89,7 @@ See up to date [jsonnet mixins](https://github.com/thanos-io/thanos/tree/main/mi
 ## Talks
 
 * 2024
+  * [Enlightning - Scaling Your Metrics with Thanos](https://www.youtube.com/live/1qvcVJiVx7M)
   * [6 Learnings from Building Thanos Project](https://www.youtube.com/watch?v=ur8dDFaNEFg)
   * [Monitoring the World: Scaling Thanos in Dynamic Prometheus Environments](https://www.youtube.com/watch?v=ofhvbG0iTjU)
   * [Scaling Thanos at Reddit](https://www.youtube.com/watch?v=c18RGbAxCfI)
@@ -137,6 +138,7 @@ See up to date [jsonnet mixins](https://github.com/thanos-io/thanos/tree/main/mi
 ## Blog posts
 
 * 2024:
+  * [Scaling Prometheus with Thanos.](https://www.cloudraft.io/blog/scaling-prometheus-with-thanos)
   * [Streamlining Long-Term Storage Query Performance for Metrics With Thanos.](https://blog.devops.dev/streamlining-long-term-storage-query-performance-for-metrics-with-thanos-b44419c70cc4)
 
 * 2023:
@@ -151,16 +153,15 @@ See up to date [jsonnet mixins](https://github.com/thanos-io/thanos/tree/main/mi
   * [Adopting Thanos at LastPass](https://krisztianfekete.org/adopting-thanos-at-lastpass/)
 
 * 2020:
-  * [Monitoring the Beat microservices: A tale of evolution](https://build.thebeat.co/monitoring-the-beat-microservices-a-tale-of-evolution-4e246882606e)
+  * [Banzai Cloud user story](https://outshift.cisco.com/blog/multi-cluster-monitoring)
 
 * 2019:
   * [Red Hat user story](https://blog.openshift.com/federated-prometheus-with-thanos-receive/)
-  * [Taboola user story](https://blog.taboola.com/monitoring-and-metering-scale/)
+  * [Thanos deployment](https://www.metricfire.com/blog/ha-kubernetes-monitoring-using-prometheus-and-thanos)
   * [Thanos via Prometheus Operator](https://kkc.github.io/2019/02/10/prometheus-operator-with-thanos/)
 
 * 2018:
   * [Monzo user story](https://monzo.com/blog/2018/07/27/how-we-monitor-monzo)
-  * [uSwitch user story](https://medium.com/uswitch-labs/making-prometheus-more-awesome-with-thanos-fbec8c6c28ad)
   * [Thanos usage](https://www.infracloud.io/blogs/thanos-ha-scalable-prometheus/)
 
 ## Integrations

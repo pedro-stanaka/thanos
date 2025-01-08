@@ -276,6 +276,9 @@ faulty_config:
 }
 
 func TestReloader_DirectoriesApply(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("Skipping test as it requires inotify support.")
+	}
 	l, err := net.Listen("tcp", "localhost:0")
 	testutil.Ok(t, err)
 
