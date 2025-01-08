@@ -290,6 +290,24 @@ func TestTSDBStore_Series(t *testing.T) {
 				{lset: unsortedLabelsFromStrings("a", "1", "b", "1", "region", "eu-west")},
 			},
 		},
+		{
+			name: "label present both as internal and external, external label preserved",
+			series: []labels.Labels{
+				labels.FromStrings("a", "2", "z", "1", "region", "eu-west-internal"),
+			},
+			externalLabels: labels.FromStrings("a", "ext"),
+			req: &storepb.SeriesRequest{
+				MinTime: 1,
+				MaxTime: 3,
+				Matchers: []storepb.LabelMatcher{
+					{Type: storepb.LabelMatcher_RE, Name: "z", Value: ".+"},
+				},
+				SkipChunks: true,
+			},
+			expectedSeries: []rawSeries{
+				{lset: unsortedLabelsFromStrings("a", "ext", "region", "eu-west", "z", "1")},
+			},
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			db, err := e2eutil.NewTSDB()
