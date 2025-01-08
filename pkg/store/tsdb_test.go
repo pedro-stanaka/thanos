@@ -295,20 +295,17 @@ func TestTSDBStore_Series(t *testing.T) {
 			series: []labels.Labels{
 				labels.FromStrings("a", "2", "z", "1", "region", "eu-west-internal"),
 			},
+			externalLabels: labels.FromStrings("a", "ext"),
 			req: &storepb.SeriesRequest{
 				MinTime: 1,
 				MaxTime: 3,
 				Matchers: []storepb.LabelMatcher{
-					{Type: storepb.LabelMatcher_RE, Name: "a", Value: ".+"},
+					{Type: storepb.LabelMatcher_RE, Name: "z", Value: ".+"},
 				},
 				SkipChunks: true,
-				ShardInfo: &storepb.ShardInfo{
-					ShardIndex:  1,
-					TotalShards: 2,
-				},
 			},
 			expectedSeries: []rawSeries{
-				{lset: unsortedLabelsFromStrings("a", "2", "region", "eu-west", "z", "1")},
+				{lset: unsortedLabelsFromStrings("a", "ext", "region", "eu-west", "z", "1")},
 			},
 		},
 	} {
