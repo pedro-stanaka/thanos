@@ -133,7 +133,7 @@ func (f *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	startTime := time.Now()
 	resp, err := f.roundTripper.RoundTrip(r)
 	queryResponseTime := time.Since(startTime)
-	f.reportQueryLatency(r, w.Header(), queryResponseTime, err)
+	f.reportQueryLatency(r, queryResponseTime, err)
 
 	if err != nil {
 		writeError(w, err)
@@ -212,7 +212,10 @@ func (f *Handler) remoteUser(r *http.Request) string {
 
 func getRequestId(r *http.Request) (string, bool) {
 	requestID := r.Header.Get("X-Request-ID")
-	return requestID, requestID != ""
+	if requestID == "" {
+		requestID = "-"
+	}
+	return requestID, requestID != "-"
 }
 
 func (f *Handler) getHeaderInfo(r *http.Request) (fields []interface{}) {
@@ -247,15 +250,7 @@ func (f *Handler) reportSlowQuery(
 	queryResponseTime time.Duration,
 	stats *querier_stats.Stats,
 ) {
-	// NOTE(GiedriusS): see https://github.com/grafana/grafana/pull/60301 for more info.
-	grafanaDashboardUID := "-"
-	if dashboardUID := r.Header.Get("X-Dashboard-Uid"); dashboardUID != "" {
-		grafanaDashboardUID = dashboardUID
-	}
-	grafanaPanelID := "-"
-	if panelID := r.Header.Get("X-Panel-Id"); panelID != "" {
-		grafanaPanelID = panelID
-	}
+	grafanaDashboardUID, grafanaPanelID := getGrafanaDashboardAndPanel(r)
 	thanosTraceID := "-"
 	if traceID := responseHeaders.Get("X-Thanos-Trace-Id"); traceID != "" {
 		thanosTraceID = traceID
@@ -276,9 +271,22 @@ func (f *Handler) reportSlowQuery(
 	}, formatQueryString(queryString)...)
 
 	logMessage = addQueryRangeToLogMessage(logMessage, queryString)
-	logMessage = f.addStatsToLogMessage(logMessage, stats)
+	logMessage = f.addSampleStatsToLogMessage(logMessage, stats)
 
 	level.Info(util_log.WithContext(r.Context(), f.log)).Log(logMessage...)
+}
+
+func getGrafanaDashboardAndPanel(r *http.Request) (string, string) {
+	// NOTE(GiedriusS): see https://github.com/grafana/grafana/pull/60301 for more info.
+	grafanaDashboardUID := "-"
+	if dashboardUID := r.Header.Get("X-Dashboard-Uid"); dashboardUID != "" {
+		grafanaDashboardUID = dashboardUID
+	}
+	grafanaPanelID := "-"
+	if panelID := r.Header.Get("X-Panel-Id"); panelID != "" {
+		grafanaPanelID = panelID
+	}
+	return grafanaDashboardUID, grafanaPanelID
 }
 
 func (f *Handler) reportQueryStats(r *http.Request, queryString url.Values, queryResponseTime time.Duration, stats *querier_stats.Stats) {
@@ -290,7 +298,11 @@ func (f *Handler) reportQueryStats(r *http.Request, queryString url.Values, quer
 	wallTime := stats.LoadWallTime()
 	numSeries := stats.LoadFetchedSeries()
 	numBytes := stats.LoadFetchedChunkBytes()
-	remoteUser, _, _ := r.BasicAuth()
+	traceId := getTraceId(r)
+	requestId, _ := getRequestId(r)
+
+	// grafana info
+	grafanaDashboardUID, grafanaPanelID := getGrafanaDashboardAndPanel(r)
 
 	// Track stats.
 	f.querySeconds.WithLabelValues(userID).Add(wallTime.Seconds())
@@ -304,20 +316,35 @@ func (f *Handler) reportQueryStats(r *http.Request, queryString url.Values, quer
 		"component", "query-frontend",
 		"method", r.Method,
 		"path", r.URL.Path,
-		"remote_user", remoteUser,
+		"remote_user", f.remoteUser(r),
 		"remote_addr", r.RemoteAddr,
 		"response_time", queryResponseTime,
 		"query_wall_time_seconds", wallTime.Seconds(),
 		"fetched_series_count", numSeries,
 		"fetched_chunks_bytes", numBytes,
+		"request_id", requestId,
+		"trace_id", traceId,
+		"grafana_dashboard_uid", grafanaDashboardUID,
+		"grafana_panel_id", grafanaPanelID,
+		"time_taken", queryResponseTime.String(),
+		"time_taken_seconds", queryResponseTime.Seconds(),
 	}, formatQueryString(queryString)...)
-	f.addStatsToLogMessage(logMessage, stats)
-	addQueryRangeToLogMessage(logMessage, queryString)
+
+	logMessage = f.addSampleStatsToLogMessage(logMessage, stats)
+	logMessage = addQueryRangeToLogMessage(logMessage, queryString)
 
 	level.Info(util_log.WithContext(r.Context(), f.log)).Log(logMessage...)
 }
 
-func (f *Handler) reportQueryLatency(r *http.Request, resHeaders http.Header, responseTime time.Duration, err error) {
+func getTraceId(r *http.Request) string {
+	traceId := "-"
+	if traceID := r.Header.Get("X-Thanos-Trace-Id"); traceID != "" {
+		traceId = traceID
+	}
+	return traceId
+}
+
+func (f *Handler) reportQueryLatency(r *http.Request, responseTime time.Duration, err error) {
 	if !f.cfg.QueryStatsEnabled {
 		return
 	}
@@ -325,10 +352,7 @@ func (f *Handler) reportQueryLatency(r *http.Request, resHeaders http.Header, re
 	if err != nil {
 		status = "error"
 	}
-	traceId := "-"
-	if traceID := resHeaders.Get("X-Thanos-Trace-Id"); traceID != "" {
-		traceId = traceID
-	}
+	traceId := getTraceId(r)
 
 	var (
 		user, _, _   = r.BasicAuth()
@@ -369,7 +393,7 @@ func formatQueryString(queryString url.Values) (fields []interface{}) {
 	return fields
 }
 
-func (f *Handler) addStatsToLogMessage(message []interface{}, stats *querier_stats.Stats) []interface{} {
+func (f *Handler) addSampleStatsToLogMessage(message []interface{}, stats *querier_stats.Stats) []interface{} {
 	if stats != nil {
 		message = append(message, "peak_samples", stats.LoadPeakSamples())
 		message = append(message, "total_samples_loaded", stats.LoadTotalSamples())
