@@ -137,7 +137,9 @@ func (f *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		writeError(w, err)
-		f.reportFailedQuery(r, queryResponseTime, queryString, err)
+		if isQueryEndpoint(r.URL.Path) {
+			f.reportFailedQuery(r, queryResponseTime, queryString, err)
+		}
 		return
 	}
 
@@ -175,9 +177,6 @@ func (f *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // reportFailedQuery reports querie with error.
 func (f *Handler) reportFailedQuery(r *http.Request, responseTime time.Duration, queryString url.Values, err error) {
-	if isQueryEndpoint(r.URL.Path) {
-		return
-	}
 	var (
 		headers      = f.getHeaderInfo(r)
 		requestId, _ = getRequestId(r)
