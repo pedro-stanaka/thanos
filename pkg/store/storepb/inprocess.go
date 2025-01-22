@@ -7,6 +7,7 @@ import (
 	"context"
 	"io"
 	"iter"
+	"sync"
 
 	"google.golang.org/grpc"
 )
@@ -36,6 +37,7 @@ func (s *inProcessServer) Context() context.Context {
 type inProcessClient struct {
 	Store_SeriesClient
 	ctx  context.Context
+	mtx  sync.Mutex
 	next func() (*SeriesResponse, error, bool)
 	stop func()
 }
@@ -49,6 +51,9 @@ func newInProcessClient(ctx context.Context, next func() (*SeriesResponse, error
 }
 
 func (c *inProcessClient) Recv() (*SeriesResponse, error) {
+	c.mtx.Lock()
+	defer c.mtx.Unlock()
+
 	resp, err, ok := c.next()
 	if err != nil {
 		c.stop()
@@ -68,6 +73,9 @@ func (c *inProcessClient) Context() context.Context {
 }
 
 func (c *inProcessClient) CloseSend() error {
+	c.mtx.Lock()
+	defer c.mtx.Unlock()
+
 	c.stop()
 	return nil
 }

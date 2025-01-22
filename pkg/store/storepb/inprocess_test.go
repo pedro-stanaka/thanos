@@ -5,8 +5,10 @@ package storepb
 
 import (
 	"context"
+	"github.com/stretchr/testify/require"
 	"io"
 	"testing"
+	"time"
 
 	"github.com/thanos-io/thanos/pkg/testutil/custom"
 
@@ -220,4 +222,42 @@ func TestServerAsClient(t *testing.T) {
 			}
 		})
 	})
+}
+
+func TestInProcessConcurrentUsage(t *testing.T) {
+	defer custom.TolerantVerifyLeak(t)
+
+	s := &testStoreServer{
+		series: []*SeriesResponse{
+			NewSeriesResponse(&Series{
+				Labels: []labelpb.ZLabel{{Name: "a", Value: "b"}},
+				Chunks: []AggrChunk{{MinTime: 123, MaxTime: 124}, {MinTime: 12455, MaxTime: 14124}},
+			}),
+			NewSeriesResponse(&Series{
+				Labels: []labelpb.ZLabel{{Name: "a", Value: "b1"}},
+				Chunks: []AggrChunk{{MinTime: 1231, MaxTime: 124}, {MinTime: 12455, MaxTime: 14124}},
+			}),
+			NewWarnSeriesResponse(errors.New("yolo")),
+			NewSeriesResponse(&Series{
+				Labels: []labelpb.ZLabel{{Name: "a", Value: "b3"}},
+				Chunks: []AggrChunk{{MinTime: 123, MaxTime: 124}, {MinTime: 124554, MaxTime: 14124}},
+			}),
+		}}
+
+	for i := 0; i < 200; i++ {
+		client, err := ServerAsClient(s).Series(context.Background(), &SeriesRequest{})
+		testutil.Ok(t, err)
+		go func() {
+			<-time.After(10 * time.Millisecond)
+			require.NoError(t, client.CloseSend())
+		}()
+		for {
+			_, err := client.Recv()
+			if err == io.EOF {
+				break
+			}
+			testutil.Ok(t, err)
+			<-time.After(5 * time.Millisecond)
+		}
+	}
 }
