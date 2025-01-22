@@ -5,10 +5,11 @@ package storepb
 
 import (
 	"context"
-	"github.com/stretchr/testify/require"
 	"io"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/thanos-io/thanos/pkg/testutil/custom"
 
