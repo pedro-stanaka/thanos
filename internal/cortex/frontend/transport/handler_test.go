@@ -5,6 +5,7 @@ package transport
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -95,6 +96,86 @@ func TestHandler_SlowQueryLog(t *testing.T) {
 					},
 					Body: io.NopCloser(bytes.NewBufferString(`{}`)),
 				},
+			}
+
+			logWriter := &bytes.Buffer{}
+			logger := log.NewLogfmtLogger(log.NewSyncWriter(logWriter))
+
+			handler := NewHandler(cfg, fakeRoundTripper, logger, prometheus.NewRegistry())
+
+			handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", tt.url, nil))
+
+			for _, part := range tt.logParts {
+				require.Contains(t, logWriter.String(), part)
+			}
+		})
+	}
+}
+
+func TestHandler_FailedQueryLog(t *testing.T) {
+	t.Parallel()
+
+	cfg := HandlerConfig{
+		QueryStatsEnabled: true,
+	}
+
+	tests := []struct {
+		name     string
+		url      string
+		logParts []string
+	}{
+		{
+			name: "Failed query",
+			url:  "/api/v1/query?query=up{invalid}&start=1714262400&end=1714266000",
+			logParts: []string{
+				"failed query detected",
+				"path=/api/v1/query",
+				"param_query=up{invalid}",
+				"param_start=1714262400",
+				"param_end=1714266000",
+				"time_taken=",
+				"error=",
+			},
+		},
+		{
+			name: "Failed query range",
+			url:  "/api/v1/query_range?query=rate(invalid[5m])&start=1714262400&end=1714266000&step=15",
+			logParts: []string{
+				"failed query detected",
+				"path=/api/v1/query_range",
+				"param_query=rate(invalid[5m])",
+				"param_start=1714262400",
+				"param_end=1714266000",
+				"param_step=15",
+				"time_taken=",
+				"error=",
+			},
+		},
+		{
+			name: "Failed series call",
+			url:  "/api/v1/series?match[]={invalid}",
+			logParts: []string{
+				"failed query detected",
+				"path=/api/v1/series",
+				"param_match[]=",
+				"time_taken=",
+				"error=",
+			},
+		},
+		{
+			name: "Non-query endpoint",
+			url:  "/favicon.ico",
+			// No failed query log for non-query endpoints
+			logParts: []string{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			fakeRoundTripper := &fakeRoundTripper{
+				requestLatency: 1 * time.Microsecond,
+				err:            fmt.Errorf("simulated error"),
 			}
 
 			logWriter := &bytes.Buffer{}

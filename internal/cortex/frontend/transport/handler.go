@@ -135,10 +135,18 @@ func (f *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	queryResponseTime := time.Since(startTime)
 	f.reportQueryLatency(r, queryResponseTime, err)
 
+	// Check whether we should parse the query string.
+	shouldReportSlowQuery := f.cfg.LogQueriesLongerThan != 0 &&
+		queryResponseTime > f.cfg.LogQueriesLongerThan &&
+		isQueryEndpoint(r.URL.Path)
+	if shouldReportSlowQuery || f.cfg.QueryStatsEnabled {
+		queryString = f.parseRequestQueryString(r, buf)
+	}
+
 	if err != nil {
 		writeError(w, err)
 		if isQueryEndpoint(r.URL.Path) {
-			f.reportFailedQuery(r, queryResponseTime, err)
+			f.reportFailedQuery(r, queryString, queryResponseTime, err)
 		}
 		return
 	}
@@ -159,14 +167,6 @@ func (f *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		level.Error(util_log.WithContext(r.Context(), f.log)).Log("msg", "write response body error", "bytesCopied", bytesCopied, "err", err)
 	}
 
-	// Check whether we should parse the query string.
-	shouldReportSlowQuery := f.cfg.LogQueriesLongerThan != 0 &&
-		queryResponseTime > f.cfg.LogQueriesLongerThan &&
-		isQueryEndpoint(r.URL.Path)
-	if shouldReportSlowQuery || f.cfg.QueryStatsEnabled {
-		queryString = f.parseRequestQueryString(r, buf)
-	}
-
 	if shouldReportSlowQuery {
 		f.reportSlowQuery(r, hs, queryString, queryResponseTime, stats)
 	}
@@ -176,13 +176,12 @@ func (f *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // reportFailedQuery reports querie with error.
-func (f *Handler) reportFailedQuery(r *http.Request, responseTime time.Duration, err error) {
+func (f *Handler) reportFailedQuery(r *http.Request, queryString url.Values, responseTime time.Duration, err error) {
 	var (
 		headers      = f.getHeaderInfo(r)
 		requestId, _ = getRequestId(r)
 		remoteUser   = f.remoteUser(r)
 	)
-	queryString := r.URL.Query()
 	logMessage := append(append([]interface{}{
 		"msg", "failed query detected",
 		"error", err,
