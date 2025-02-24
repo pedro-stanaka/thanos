@@ -187,7 +187,7 @@ func TestReaders(t *testing.T) {
 }
 
 func compareIndexToHeader(t *testing.T, indexByteSlice index.ByteSlice, headerReader Reader) {
-	indexReader, err := index.NewReader(indexByteSlice)
+	indexReader, err := index.NewReader(indexByteSlice, index.DecodePostingsRaw)
 	testutil.Ok(t, err)
 	defer func() { _ = indexReader.Close() }()
 

@@ -160,6 +160,11 @@ func (g *GRPCAPI) getQueryForEngine(ctx context.Context, request *querypb.QueryR
 	} else {
 		ts = time.Unix(request.TimeSeconds, 0)
 	}
+	opts := &engine.QueryOpts{
+		LookbackDeltaParam:     lookbackDelta,
+		EnablePartialResponses: request.EnablePartialResponse,
+	}
+
 	switch engineParam {
 	case querypb.EngineType_prometheus:
 		queryEngine := g.engineFactory.GetPrometheusEngine()
@@ -173,7 +178,7 @@ func (g *GRPCAPI) getQueryForEngine(ctx context.Context, request *querypb.QueryR
 		}
 		level.Debug(g.logger).Log("msg", "using query plan", "plan", plan.String())
 
-		return queryEngine.NewInstantQueryFromPlan(ctx, queryable, promql.NewPrometheusQueryOpts(false, lookbackDelta), plan, ts)
+		return queryEngine.MakeInstantQueryFromPlan(ctx, queryable, opts, plan, ts)
 	default:
 		return nil, status.Error(codes.InvalidArgument, "invalid engine parameter")
 	}
@@ -294,7 +299,10 @@ func (g *GRPCAPI) getRangeQueryForEngine(
 	if request.LookbackDeltaSeconds > 0 {
 		lookbackDelta = time.Duration(request.LookbackDeltaSeconds) * time.Second
 	}
-
+	opts := &engine.QueryOpts{
+		LookbackDeltaParam:     lookbackDelta,
+		EnablePartialResponses: request.EnablePartialResponse,
+	}
 	switch engineParam {
 	case querypb.EngineType_prometheus:
 		queryEngine := g.engineFactory.GetPrometheusEngine()
@@ -307,7 +315,7 @@ func (g *GRPCAPI) getRangeQueryForEngine(
 			return thanosEngine.NewRangeQuery(ctx, queryable, promql.NewPrometheusQueryOpts(false, lookbackDelta), request.Query, startTime, endTime, interval)
 		}
 		level.Debug(g.logger).Log("msg", "using query plan", "plan", plan.String())
-		return thanosEngine.NewRangeQueryFromPlan(ctx, queryable, promql.NewPrometheusQueryOpts(false, lookbackDelta), plan, startTime, endTime, interval)
+		return thanosEngine.MakeRangeQueryFromPlan(ctx, queryable, opts, plan, startTime, endTime, interval)
 	default:
 		return nil, status.Error(codes.InvalidArgument, "invalid engine parameter")
 	}

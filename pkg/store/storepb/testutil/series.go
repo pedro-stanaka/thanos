@@ -6,6 +6,7 @@ package storetestutil
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"math"
 	"math/rand"
 	"os"
@@ -17,7 +18,6 @@ import (
 
 	"github.com/cespare/xxhash"
 	"github.com/efficientgo/core/testutil"
-	"github.com/go-kit/log"
 	"github.com/gogo/protobuf/types"
 	"github.com/oklog/ulid"
 	"github.com/prometheus/prometheus/model/labels"
@@ -172,7 +172,7 @@ func ReadSeriesFromBlock(t testing.TB, h tsdb.BlockReader, extLabels labels.Labe
 }
 
 func CreateBlockFromHead(t testing.TB, dir string, head *tsdb.Head) ulid.ULID {
-	compactor, err := tsdb.NewLeveledCompactor(context.Background(), nil, log.NewNopLogger(), []int64{1000000}, nil, nil)
+	compactor, err := tsdb.NewLeveledCompactor(context.Background(), nil, slog.Default(), []int64{1000000}, nil, nil)
 	testutil.Ok(t, err)
 
 	testutil.Ok(t, os.MkdirAll(dir, 0777))

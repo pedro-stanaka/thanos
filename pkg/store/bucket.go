@@ -2488,7 +2488,7 @@ func (r *bucketIndexReader) fetchPostings(ctx context.Context, keys []labels.Lab
 					l = clPostings
 				}
 			} else {
-				_, l, err = r.dec.Postings(b)
+				_, l, err = index.DecodePostingsRaw(encoding.Decbuf{B: b})
 			}
 
 			if err != nil {

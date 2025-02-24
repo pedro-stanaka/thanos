@@ -31,6 +31,7 @@ import (
 	"github.com/thanos-io/thanos/internal/mimir-prometheus/config"
 	"github.com/thanos-io/thanos/internal/mimir-prometheus/model/labels"
 	"github.com/thanos-io/thanos/internal/mimir-prometheus/storage"
+	"github.com/thanos-io/thanos/pkg/logutil"
 )
 
 // String constants for instrumentation.
@@ -66,13 +67,13 @@ func NewStorage(l log.Logger, reg prometheus.Registerer, stCallback startTimeCal
 	if l == nil {
 		l = log.NewNopLogger()
 	}
-	logger := logging.Dedupe(l, 1*time.Minute)
+	logger := logging.Dedupe(logutil.GoKitLogToSlog(l), 1*time.Minute)
 
 	s := &Storage{
 		logger:                 logger,
 		localStartTimeCallback: stCallback,
 	}
-	s.rws = NewWriteStorage(s.logger, reg, walDir, flushDeadline, sm)
+	s.rws = NewWriteStorage(l, reg, walDir, flushDeadline, sm)
 	return s
 }
 

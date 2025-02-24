@@ -23,11 +23,12 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/go-kit/log"
+
 	client_testutil "github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/goleak"
 
-	"github.com/prometheus/prometheus/util/testutil"
 	"github.com/thanos-io/thanos/internal/mimir-prometheus/tsdb/fileutil"
 )
 
@@ -215,7 +216,7 @@ func TestCorruptAndCarryOn(t *testing.T) {
 	dir := t.TempDir()
 
 	var (
-		logger      = testutil.NewLogger(t)
+		logger      = log.NewNopLogger()
 		segmentSize = pageSize * 3
 		recordSize  = (pageSize / 3) - recordHeaderSize
 	)

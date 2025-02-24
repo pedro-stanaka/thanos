@@ -4,4 +4,4 @@ go 1.22
 
 toolchain go1.23.1
 
-require github.com/minio/minio v0.0.0-20241005051615-1bc668117625
+require github.com/minio/minio v0.0.0-20241014163537-3da7c9cce3de

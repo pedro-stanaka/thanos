@@ -2613,8 +2613,8 @@ github.com/minio/minio v0.0.0-20220704210254-b311abed3176 h1:Xx1JRC5AjtGxOqXuI/6
 github.com/minio/minio v0.0.0-20220704210254-b311abed3176/go.mod h1:1ZJB87MwUo2jrKDOlSjB6GArfZ0KlMqcsepa0ogMW78=
 github.com/minio/minio v0.0.0-20220720015624-ce8397f7d944 h1:U1BF4n5GQpD2L36CyU6rPehcqgos0VT6a+O4eS2XQRQ=
 github.com/minio/minio v0.0.0-20220720015624-ce8397f7d944/go.mod h1:Sprtcs2teyyESqT3Zt78AvFMgkvNm4Lv4bEeZnmvtEA=
-github.com/minio/minio v0.0.0-20241005051615-1bc668117625 h1:d0SG8LZhwH1Q3soO2RCYjnUsxmrY9pnp7xpxM6ysPbI=
-github.com/minio/minio v0.0.0-20241005051615-1bc668117625/go.mod h1:F8wOuhUPhHKmacrvLWgVJc8crr+Q8XYs/imRvss8bDQ=
+github.com/minio/minio v0.0.0-20241014163537-3da7c9cce3de h1:y43E/9B5ID9BxK1kskPvh79j7bcFBTbhk1Kmqfll/vU=
+github.com/minio/minio v0.0.0-20241014163537-3da7c9cce3de/go.mod h1:F8wOuhUPhHKmacrvLWgVJc8crr+Q8XYs/imRvss8bDQ=
 github.com/minio/minio-go/v6 v6.0.46/go.mod h1:qD0lajrGW49lKZLtXKtCB4X/qkMf0a5tBvN2PaZg7Gg=
 github.com/minio/minio-go/v6 v6.0.53/go.mod h1:DIvC/IApeHX8q1BAMVCXSXwpmrmM+I+iBvhvztQorfI=
 github.com/minio/minio-go/v6 v6.0.56-0.20200522164946-44a5f2e3b76b h1:hY8tAl7MwUuUB9ZqVDXEnrIqCuEy3dfU1RH0cZ7gu+o=

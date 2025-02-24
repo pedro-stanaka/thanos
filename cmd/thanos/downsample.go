@@ -30,6 +30,7 @@ import (
 	"github.com/thanos-io/thanos/pkg/component"
 	"github.com/thanos-io/thanos/pkg/errutil"
 	"github.com/thanos-io/thanos/pkg/extprom"
+	"github.com/thanos-io/thanos/pkg/logutil"
 	"github.com/thanos-io/thanos/pkg/prober"
 	"github.com/thanos-io/thanos/pkg/runutil"
 	httpserver "github.com/thanos-io/thanos/pkg/server/http"
@@ -374,7 +375,7 @@ func processDownsampling(
 		pool = downsample.NewPool()
 	}
 
-	b, err := tsdb.OpenBlock(logger, bdir, pool)
+	b, err := tsdb.OpenBlock(logutil.GoKitLogToSlog(logger), bdir, pool, nil)
 	if err != nil {
 		return errors.Wrapf(err, "open block %s", m.ULID)
 	}

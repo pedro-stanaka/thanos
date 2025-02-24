@@ -13,6 +13,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/thanos-io/thanos/pkg/logutil"
+
 	extflag "github.com/efficientgo/tools/extkingpin"
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
@@ -419,7 +421,7 @@ func runRule(
 		}
 
 		// flushDeadline is set to 1m, but it is for metadata watcher only so not used here.
-		remoteStore := remote.NewStorage(logger, reg, func() (int64, error) {
+		remoteStore := remote.NewStorage(logutil.GoKitLogToSlog(logger), reg, func() (int64, error) {
 			return 0, nil
 		}, conf.dataDir, 1*time.Minute, nil, false)
 		if err := remoteStore.ApplyConfig(&config.Config{
@@ -431,18 +433,18 @@ func runRule(
 			return errors.Wrap(err, "applying config to remote storage")
 		}
 
-		agentDB, err = agent.Open(logger, reg, remoteStore, conf.dataDir, agentOpts)
+		agentDB, err = agent.Open(logutil.GoKitLogToSlog(logger), reg, remoteStore, conf.dataDir, agentOpts)
 		if err != nil {
 			return errors.Wrap(err, "start remote write agent db")
 		}
-		fanoutStore := storage.NewFanout(logger, agentDB, remoteStore)
+		fanoutStore := storage.NewFanout(logutil.GoKitLogToSlog(logger), agentDB, remoteStore)
 		appendable = fanoutStore
 		// Use a separate queryable to restore the ALERTS firing states.
 		// We cannot use remoteStore directly because it uses remote read for
 		// query. However, remote read is not implemented in Thanos Receiver.
 		queryable = thanosrules.NewPromClientsQueryable(logger, queryClients, promClients, conf.query.httpMethod, conf.query.step, conf.ignoredLabelNames)
 	} else {
-		tsdbDB, err = tsdb.Open(conf.dataDir, log.With(logger, "component", "tsdb"), reg, tsdbOpts, nil)
+		tsdbDB, err = tsdb.Open(conf.dataDir, logutil.GoKitLogToSlog(log.With(logger, "component", "tsdb")), reg, tsdbOpts, nil)
 		if err != nil {
 			return errors.Wrap(err, "open TSDB")
 		}
@@ -565,7 +567,7 @@ func runRule(
 			conf.dataDir,
 			rules.ManagerOptions{
 				NotifyFunc:      notifyFunc,
-				Logger:          logger,
+				Logger:          logutil.GoKitLogToSlog(logger),
 				Appendable:      appendable,
 				ExternalURL:     nil,
 				Queryable:       queryable,

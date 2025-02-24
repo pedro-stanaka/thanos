@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/thanos-io/thanos/pkg/logutil"
+
 	extflag "github.com/efficientgo/tools/extkingpin"
 	"google.golang.org/grpc"
 
@@ -260,7 +262,7 @@ func registerQuery(app *extkingpin.App) {
 				RefreshInterval: *fileSDInterval,
 			}
 			var err error
-			if fileSD, err = file.NewDiscovery(conf, logger, conf.NewDiscovererMetrics(reg, discovery.NewRefreshMetrics(reg))); err != nil {
+			if fileSD, err = file.NewDiscovery(conf, logutil.GoKitLogToSlog(logger), conf.NewDiscovererMetrics(reg, discovery.NewRefreshMetrics(reg))); err != nil {
 				return err
 			}
 		}
@@ -667,7 +669,7 @@ func runQuery(
 	)
 
 	engineOpts := promql.EngineOpts{
-		Logger: logger,
+		Logger: logutil.GoKitLogToSlog(logger),
 		Reg:    reg,
 		// TODO(bwplotka): Expose this as a flag: https://github.com/thanos-io/thanos/issues/703.
 		MaxSamples:    math.MaxInt32,
@@ -683,7 +685,7 @@ func runQuery(
 	// An active query tracker will be added only if the user specifies a non-default path.
 	// Otherwise, the nil active query tracker from existing engine options will be used.
 	if activeQueryDir != "" {
-		engineOpts.ActiveQueryTracker = promql.NewActiveQueryTracker(activeQueryDir, maxConcurrentQueries, logger)
+		engineOpts.ActiveQueryTracker = promql.NewActiveQueryTracker(activeQueryDir, maxConcurrentQueries, logutil.GoKitLogToSlog(logger))
 	}
 
 	var remoteEngineEndpoints api.RemoteEndpoints
