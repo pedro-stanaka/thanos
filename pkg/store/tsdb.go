@@ -188,6 +188,7 @@ func (s *TSDBStore) Series(r *storepb.SeriesRequest, srv storepb.Store_SeriesSer
 		// The promql-engine will already skip samples that are outside the time range.
 		// No need to trim and re-encode chunks just because of that.
 		DisableTrimming: true,
+		Limit:           int(r.Limit),
 	}
 	set := q.Select(srv.Context(), true, hints, matchers...)
 
@@ -358,7 +359,10 @@ func (s *TSDBStore) LabelNames(ctx context.Context, r *storepb.LabelNamesRequest
 	}
 	defer runutil.CloseWithLogOnErr(s.logger, q, "close tsdb querier label names")
 
-	res, _, err := q.LabelNames(ctx, nil, matchers...)
+	hints := &storage.LabelHints{
+		Limit: int(r.Limit),
+	}
+	res, _, err := q.LabelNames(ctx, hints, matchers...)
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
@@ -414,6 +418,7 @@ func (s *TSDBStore) LabelValues(ctx context.Context, r *storepb.LabelValuesReque
 			Start: r.Start,
 			End:   r.End,
 			Func:  "series",
+			Limit: int(r.Limit),
 		}
 		set := q.Select(ctx, false, hints, matchers...)
 
@@ -423,9 +428,16 @@ func (s *TSDBStore) LabelValues(ctx context.Context, r *storepb.LabelValuesReque
 		return &storepb.LabelValuesResponse{}, nil
 	}
 
-	res, _, err := q.LabelValues(ctx, r.Label, nil, matchers...)
+	hints := &storage.LabelHints{
+		Limit: int(r.Limit),
+	}
+	res, _, err := q.LabelValues(ctx, r.Label, hints, matchers...)
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	if hints.Limit > 0 && len(res) > hints.Limit {
+		res = res[:hints.Limit]
 	}
 
 	// Label values can come from a postings table of a memory-mapped block which can be deleted during

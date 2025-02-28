@@ -17,6 +17,7 @@ import (
 	"github.com/prometheus/prometheus/tsdb/index"
 
 	"github.com/efficientgo/core/testutil"
+
 	storetestutil "github.com/thanos-io/thanos/pkg/store/storepb/testutil"
 )
 
@@ -125,7 +126,7 @@ func allPostings(t testing.TB, ix tsdb.IndexReader) index.Postings {
 
 func matchPostings(t testing.TB, ix tsdb.IndexReader, m *labels.Matcher) index.Postings {
 	ctx := context.Background()
-	vals, err := ix.LabelValues(ctx, m.Name)
+	vals, err := ix.LabelValues(ctx, m.Name, &storage.LabelHints{})
 	testutil.Ok(t, err)
 
 	matching := []string(nil)
