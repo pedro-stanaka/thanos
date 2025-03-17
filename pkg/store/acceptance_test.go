@@ -5,7 +5,6 @@ package store
 
 import (
 	"context"
-	"slices"
 	"testing"
 	"time"
 
@@ -283,8 +282,6 @@ func testLabelAPIs(t *testing.T, startStore func(extLset labels.Labels, append f
 					if len(resp.Values) == 0 {
 						resp.Values = nil
 					}
-					// With label value call improvements the resp will no longer be sorted.
-					slices.Sort(resp.Values)
 					testutil.Equals(t, c.expectedValues, resp.Values)
 				})
 			}
