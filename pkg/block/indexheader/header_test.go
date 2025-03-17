@@ -22,6 +22,7 @@ import (
 	"github.com/thanos-io/objstore/providers/filesystem"
 
 	"github.com/efficientgo/core/testutil"
+
 	"github.com/thanos-io/thanos/pkg/block"
 	"github.com/thanos-io/thanos/pkg/block/metadata"
 	"github.com/thanos-io/thanos/pkg/testutil/e2eutil"
@@ -237,7 +238,7 @@ func compareIndexToHeader(t *testing.T, indexByteSlice index.ByteSlice, headerRe
 	minStart := int64(math.MaxInt64)
 	maxEnd := int64(math.MinInt64)
 	for il, lname := range expLabelNames {
-		expectedLabelVals, err := indexReader.SortedLabelValues(ctx, lname)
+		expectedLabelVals, err := indexReader.SortedLabelValues(ctx, lname, nil)
 		testutil.Ok(t, err)
 
 		vals, err := headerReader.LabelValues(lname)
