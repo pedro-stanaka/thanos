@@ -95,8 +95,8 @@ const (
 
 type ThanosEngine interface {
 	promql.QueryEngine
-	NewInstantQueryFromPlan(ctx context.Context, q storage.Queryable, opts promql.QueryOpts, plan logicalplan.Node, ts time.Time) (promql.Query, error)
-	NewRangeQueryFromPlan(ctx context.Context, q storage.Queryable, opts promql.QueryOpts, root logicalplan.Node, start, end time.Time, step time.Duration) (promql.Query, error)
+	MakeInstantQueryFromPlan(ctx context.Context, q storage.Queryable, opts *engine.QueryOpts, plan logicalplan.Node, ts time.Time) (promql.Query, error)
+	MakeRangeQueryFromPlan(ctx context.Context, q storage.Queryable, opts *engine.QueryOpts, root logicalplan.Node, start, end time.Time, step time.Duration) (promql.Query, error)
 }
 
 type QueryEngineFactory struct {
@@ -112,10 +112,10 @@ type QueryEngineFactory struct {
 }
 
 type secondPrecisionEngine struct {
-	engine ThanosEngine
+	engine *engine.Engine
 }
 
-func newSecondPrecisionEngine(engine ThanosEngine) *secondPrecisionEngine {
+func newSecondPrecisionEngine(engine *engine.Engine) *secondPrecisionEngine {
 	return &secondPrecisionEngine{engine: engine}
 }
 
@@ -131,16 +131,16 @@ func (s secondPrecisionEngine) NewRangeQuery(ctx context.Context, q storage.Quer
 	return s.engine.NewRangeQuery(ctx, q, opts, qs, start, end, interval)
 }
 
-func (s secondPrecisionEngine) NewInstantQueryFromPlan(ctx context.Context, q storage.Queryable, opts promql.QueryOpts, plan logicalplan.Node, ts time.Time) (promql.Query, error) {
+func (s secondPrecisionEngine) MakeInstantQueryFromPlan(ctx context.Context, q storage.Queryable, opts *engine.QueryOpts, plan logicalplan.Node, ts time.Time) (promql.Query, error) {
 	ts = ts.Truncate(time.Second)
-	return s.engine.NewInstantQueryFromPlan(ctx, q, opts, plan, ts)
+	return s.engine.MakeInstantQueryFromPlan(ctx, q, opts, plan, ts)
 }
 
-func (s secondPrecisionEngine) NewRangeQueryFromPlan(ctx context.Context, q storage.Queryable, opts promql.QueryOpts, root logicalplan.Node, start, end time.Time, step time.Duration) (promql.Query, error) {
+func (s secondPrecisionEngine) MakeRangeQueryFromPlan(ctx context.Context, q storage.Queryable, opts *engine.QueryOpts, root logicalplan.Node, start, end time.Time, step time.Duration) (promql.Query, error) {
 	start = start.Truncate(time.Second)
 	end = end.Truncate(time.Second)
 	step = step.Truncate(time.Second)
-	return s.engine.NewRangeQueryFromPlan(ctx, q, opts, root, start, end, step)
+	return s.engine.MakeRangeQueryFromPlan(ctx, q, opts, root, start, end, step)
 }
 
 func (f *QueryEngineFactory) GetPrometheusEngine() promql.QueryEngine {
@@ -148,7 +148,6 @@ func (f *QueryEngineFactory) GetPrometheusEngine() promql.QueryEngine {
 		if f.prometheusEngine != nil {
 			return
 		}
-
 		f.prometheusEngine = promql.NewEngine(f.engineOpts)
 	})
 
@@ -1221,7 +1220,7 @@ func (qapi *QueryAPI) series(r *http.Request) (interface{}, []error, *api.ApiErr
 		sets = append(sets, q.Select(r.Context(), false, nil, mset...))
 	}
 
-	set := storage.NewMergeSeriesSet(sets, storage.ChainedSeriesMerge)
+	set := storage.NewMergeSeriesSet(sets, 0, storage.ChainedSeriesMerge)
 	for set.Next() {
 		metrics = append(metrics, set.At().Labels())
 	}

@@ -31,7 +31,6 @@ import (
 	"github.com/go-kit/log"
 	"github.com/stretchr/testify/require"
 
-	"github.com/prometheus/prometheus/util/testutil"
 	tsdb_errors "github.com/thanos-io/thanos/internal/mimir-prometheus/tsdb/errors"
 )
 
@@ -198,7 +197,7 @@ func TestReader(t *testing.T) {
 }
 
 func TestReader_Live(t *testing.T) {
-	logger := testutil.NewLogger(t)
+	logger := log.NewNopLogger()
 
 	for i := range testReaderCases {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
@@ -348,7 +347,7 @@ func TestReaderFuzz(t *testing.T) {
 }
 
 func TestReaderFuzz_Live(t *testing.T) {
-	logger := testutil.NewLogger(t)
+	logger := log.NewNopLogger()
 	for _, compress := range []bool{false, true} {
 		t.Run(fmt.Sprintf("compress=%t", compress), func(t *testing.T) {
 			dir := t.TempDir()
@@ -436,7 +435,7 @@ func TestReaderFuzz_Live(t *testing.T) {
 func TestLiveReaderCorrupt_ShortFile(t *testing.T) {
 	// Write a corrupt WAL segment, there is one record of pageSize in length,
 	// but the segment is only half written.
-	logger := testutil.NewLogger(t)
+	logger := log.NewNopLogger()
 	dir := t.TempDir()
 
 	w, err := NewSize(nil, nil, dir, pageSize, false)
@@ -476,7 +475,7 @@ func TestLiveReaderCorrupt_ShortFile(t *testing.T) {
 
 func TestLiveReaderCorrupt_RecordTooLongAndShort(t *testing.T) {
 	// Write a corrupt WAL segment, when record len > page size.
-	logger := testutil.NewLogger(t)
+	logger := log.NewNopLogger()
 	dir := t.TempDir()
 
 	w, err := NewSize(nil, nil, dir, pageSize*2, false)

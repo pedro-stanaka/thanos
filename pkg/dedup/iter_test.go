@@ -11,6 +11,8 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/prometheus/prometheus/tsdb/chunks"
+
 	"github.com/prometheus/prometheus/model/histogram"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/storage"
@@ -28,6 +30,10 @@ import (
 type sample struct {
 	t int64
 	f float64
+}
+
+func (s sample) Copy() chunks.Sample {
+	return sample{s.t, s.f}
 }
 
 func (s sample) T() int64 {

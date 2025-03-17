@@ -9,6 +9,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"log/slog"
 	"math"
 	"math/rand"
 	"os"
@@ -21,6 +22,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/thanos-io/thanos/pkg/logutil"
 
 	"github.com/cespare/xxhash"
 	"golang.org/x/exp/slices"
@@ -67,7 +70,7 @@ import (
 var emptyRelabelConfig = make([]*relabel.Config, 0)
 
 func createBlockFromHead(t testing.TB, dir string, head *tsdb.Head) ulid.ULID {
-	compactor, err := tsdb.NewLeveledCompactor(context.Background(), nil, log.NewNopLogger(), []int64{1000000}, nil, nil)
+	compactor, err := tsdb.NewLeveledCompactor(context.Background(), nil, slog.Default(), []int64{1000000}, nil, nil)
 	testutil.Ok(t, err)
 	testutil.Ok(t, os.MkdirAll(dir, 0777))
 
@@ -1364,7 +1367,7 @@ func benchBucketSeries(t testutil.TB, sampleType chunkenc.ValueType, skipChunk b
 		// Histogram chunks are represented differently in memory and on disk. In order to
 		// have a precise comparison, we need to use the on-disk representation as the expected value
 		// instead of the in-memory one.
-		diskBlock, err := tsdb.OpenBlock(logger, path.Join(blockDir, id.String()), nil)
+		diskBlock, err := tsdb.OpenBlock(logutil.GoKitLogToSlog(logger), path.Join(blockDir, id.String()), nil, nil)
 		testutil.Ok(t, err)
 		series = append(series, storetestutil.ReadSeriesFromBlock(t, diskBlock, extLset, skipChunk)...)
 

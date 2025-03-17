@@ -11,6 +11,8 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/thanos-io/thanos/pkg/logutil"
+
 	"github.com/go-kit/log"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -486,7 +488,7 @@ func TestDownsample(t *testing.T) {
 			_, err = metadata.ReadFromDir(filepath.Join(dir, id.String()))
 			testutil.Ok(t, err)
 
-			indexr, err := index.NewFileReader(filepath.Join(dir, id.String(), block.IndexFilename))
+			indexr, err := index.NewFileReader(filepath.Join(dir, id.String(), block.IndexFilename), index.DecodePostingsRaw)
 			testutil.Ok(t, err)
 			defer func() { testutil.Ok(t, indexr.Close()) }()
 
@@ -614,7 +616,8 @@ func TestDownsampleAggrAndNonEmptyXORChunks(t *testing.T) {
 	_, err = metadata.ReadFromDir(filepath.Join(dir, id.String()))
 	testutil.Ok(t, err)
 
-	indexr, err := index.NewFileReader(filepath.Join(dir, id.String(), block.IndexFilename))
+	indexr, err := index.NewFileReader(filepath.Join(dir, id.String(), block.IndexFilename), index.DecodePostingsRaw)
+	testutil.Ok(t, err)
 	testutil.Ok(t, err)
 	defer func() { testutil.Ok(t, indexr.Close()) }()
 
@@ -865,7 +868,7 @@ func TestDownSampleNativeHistogram(t *testing.T) {
 				compareAggreggates(t, dir, ResLevel1, idResLevel1.String(), tt.expectedReseLevel1, chks[0])
 			}
 
-			blk, err := tsdb.OpenBlock(logger, filepath.Join(dir, idResLevel1.String()), NewPool())
+			blk, err := tsdb.OpenBlock(logutil.GoKitLogToSlog(logger), filepath.Join(dir, idResLevel1.String()), NewPool(), nil)
 			testutil.Ok(t, err)
 			idResLevel2, err := Downsample(context.Background(), logger, meta, blk, dir, ResLevel2, nil)
 			testutil.Ok(t, err)
@@ -910,7 +913,7 @@ func TestDropMixedChunkTypes(t *testing.T) {
 		})
 		hGaugeSamples = append(hGaugeSamples, sample{
 			t:  ts,
-			fh: tsdbutil.GenerateTestGaugeFloatHistogram(i),
+			fh: tsdbutil.GenerateTestGaugeFloatHistogram(int64(i)),
 		})
 	}
 
@@ -1436,6 +1439,13 @@ func TestSamplesFromTSDBSamples(t *testing.T) {
 type testSample struct {
 	t int64
 	f float64
+}
+
+func (s testSample) Copy() chunks.Sample {
+	return testSample{
+		t: s.t,
+		f: s.f,
+	}
 }
 
 func (s testSample) T() int64 {

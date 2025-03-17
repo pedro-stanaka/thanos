@@ -158,6 +158,12 @@ func (f *fakeAppender) AppendHistogram(ref storage.SeriesRef, l labels.Labels, t
 	panic("not implemented")
 }
 
+func (f *fakeAppender) SetOptions(opts *storage.AppendOptions) {}
+
+func (f *fakeAppender) AppendHistogramCTZeroSample(ref storage.SeriesRef, l labels.Labels, t, ct int64, h *histogram.Histogram, fh *histogram.FloatHistogram) (storage.SeriesRef, error) {
+	return 0, nil
+}
+
 func (f *fakeAppender) GetRef(l labels.Labels, hash uint64) (storage.SeriesRef, labels.Labels) {
 	return storage.SeriesRef(hash), l
 }

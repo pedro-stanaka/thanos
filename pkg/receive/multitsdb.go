@@ -12,6 +12,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/thanos-io/thanos/pkg/logutil"
+
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
 	"github.com/pkg/errors"
@@ -620,7 +622,7 @@ func (t *MultiTSDB) startTSDB(logger log.Logger, tenantID string, tenant *tenant
 	opts := *t.tsdbOpts
 	s, err := tsdb.Open(
 		dataDir,
-		logger,
+		logutil.GoKitLogToSlog(logger),
 		reg,
 		&opts,
 		nil,

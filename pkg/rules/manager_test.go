@@ -6,6 +6,7 @@ package rules
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sort"
@@ -14,7 +15,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-kit/log"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/model/exemplar"
@@ -38,6 +38,12 @@ type nopAppendable struct{}
 func (n nopAppendable) Appender(_ context.Context) storage.Appender { return nopAppender{} }
 
 type nopAppender struct{}
+
+func (n nopAppender) SetOptions(opts *storage.AppendOptions) {}
+
+func (n nopAppender) AppendHistogramCTZeroSample(ref storage.SeriesRef, l labels.Labels, t, ct int64, h *histogram.Histogram, fh *histogram.FloatHistogram) (storage.SeriesRef, error) {
+	return 0, nil
+}
 
 func (n nopAppender) Append(storage.SeriesRef, labels.Labels, int64, float64) (storage.SeriesRef, error) {
 	return 0, nil
@@ -90,7 +96,7 @@ groups:
 		nil,
 		dir,
 		rules.ManagerOptions{
-			Logger:     log.NewLogfmtLogger(os.Stderr),
+			Logger:     slog.Default(),
 			Context:    context.Background(),
 			Appendable: nopAppendable{},
 			Queryable:  nopQueryable{},
@@ -190,7 +196,7 @@ groups:
 		reg,
 		dataDir,
 		rules.ManagerOptions{
-			Logger:    log.NewLogfmtLogger(os.Stderr),
+			Logger:    slog.Default(),
 			Queryable: nopQueryable{},
 		},
 		func(partialResponseStrategy storepb.PartialResponseStrategy) rules.QueryFunc {
@@ -337,7 +343,7 @@ func TestManager_Rules(t *testing.T) {
 		nil,
 		dir,
 		rules.ManagerOptions{
-			Logger:    log.NewLogfmtLogger(os.Stderr),
+			Logger:    slog.Default(),
 			Queryable: nopQueryable{},
 		},
 		func(partialResponseStrategy storepb.PartialResponseStrategy) rules.QueryFunc {
@@ -377,7 +383,7 @@ groups:
 		nil,
 		dir,
 		rules.ManagerOptions{
-			Logger:    log.NewLogfmtLogger(os.Stderr),
+			Logger:    slog.Default(),
 			Queryable: nopQueryable{},
 		},
 		func(partialResponseStrategy storepb.PartialResponseStrategy) rules.QueryFunc {
@@ -424,7 +430,7 @@ groups:
 		nil,
 		dir,
 		rules.ManagerOptions{
-			Logger:    log.NewLogfmtLogger(os.Stderr),
+			Logger:    slog.Default(),
 			Queryable: nopQueryable{},
 		},
 		func(partialResponseStrategy storepb.PartialResponseStrategy) rules.QueryFunc {

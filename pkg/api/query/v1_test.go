@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"math"
 	"math/rand"
 	"net/http"
@@ -31,7 +32,6 @@ import (
 	"time"
 
 	"github.com/efficientgo/core/testutil"
-	"github.com/go-kit/log"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/common/route"
@@ -703,7 +703,7 @@ func TestMetadataEndpoints(t *testing.T) {
 		series = append(series, storage.NewListSeries(lbl, samples))
 	}
 
-	_, err := tsdb.CreateBlock(series, dir, chunkRange, log.NewNopLogger())
+	_, err := tsdb.CreateBlock(series, dir, chunkRange, slog.Default())
 	testutil.Ok(t, err)
 
 	opts := tsdb.DefaultOptions()
@@ -1855,6 +1855,10 @@ func (c mockedRulesClient) Rules(_ context.Context, req *rulespb.RulesRequest) (
 type sample struct {
 	t int64
 	f float64
+}
+
+func (s sample) Copy() chunks.Sample {
+	return sample{t: s.t, f: s.f}
 }
 
 func (s sample) T() int64 {

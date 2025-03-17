@@ -19,6 +19,8 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/thanos-io/thanos/pkg/logutil"
+
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
 	"github.com/oklog/run"
@@ -1209,7 +1211,7 @@ func registerBucketRewrite(app extkingpin.AppClause, objStoreConfig *extflag.Pat
 				if err != nil {
 					return errors.Wrapf(err, "read meta of %v", id)
 				}
-				b, err := tsdb.OpenBlock(logger, filepath.Join(tbc.tmpDir, id.String()), chunkPool)
+				b, err := tsdb.OpenBlock(logutil.GoKitLogToSlog(logger), filepath.Join(tbc.tmpDir, id.String()), chunkPool, nil)
 				if err != nil {
 					return errors.Wrapf(err, "open block %v", id)
 				}

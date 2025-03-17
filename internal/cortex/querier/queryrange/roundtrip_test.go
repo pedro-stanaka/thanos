@@ -6,6 +6,7 @@ package queryrange
 import (
 	"context"
 	io "io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -52,7 +53,7 @@ func TestRoundTrip(t *testing.T) {
 		PrometheusCodec,
 		nil,
 		promql.EngineOpts{
-			Logger:     log.NewNopLogger(),
+			Logger:     slog.Default(),
 			Reg:        nil,
 			MaxSamples: 1000,
 			Timeout:    time.Minute,
