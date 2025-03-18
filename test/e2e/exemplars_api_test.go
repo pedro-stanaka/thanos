@@ -15,6 +15,7 @@ import (
 	"github.com/prometheus/prometheus/model/timestamp"
 
 	"github.com/efficientgo/core/testutil"
+
 	"github.com/thanos-io/thanos/pkg/exemplars/exemplarspb"
 	"github.com/thanos-io/thanos/pkg/store/labelpb"
 	"github.com/thanos-io/thanos/test/e2e/e2ethanos"
@@ -88,7 +89,7 @@ config:
 	end := timestamp.FromTime(now.Add(time.Hour))
 
 	// Send HTTP requests to thanos query to trigger exemplars.
-	labelNames(t, ctx, q.Endpoint("http"), nil, start, end, func(res []string) bool { return true })
+	labelNames(t, ctx, q.Endpoint("http"), nil, start, end, 0, func(res []string) bool { return true })
 
 	t.Run("Basic exemplars query", func(t *testing.T) {
 		queryExemplars(t, ctx, q.Endpoint("http"), `http_request_duration_seconds_bucket{handler="label_names"}`, start, end, exemplarsOnExpectedSeries(map[string]string{

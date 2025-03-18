@@ -1118,12 +1118,24 @@ func (qapi *QueryAPI) labelValues(r *http.Request) (interface{}, []error, *api.A
 	var (
 		vals     []string
 		warnings annotations.Annotations
+		hints    *storage.LabelHints
 	)
+	if limit := r.URL.Query().Get("limit"); limit != "" {
+		l, err := strconv.ParseUint(limit, 10, 32)
+		if err == nil {
+			if l > math.MaxInt32 {
+				l = math.MaxInt32
+			}
+			hints = &storage.LabelHints{
+				Limit: int(l),
+			}
+		}
+	}
 	if len(matcherSets) > 0 {
 		var callWarnings annotations.Annotations
 		labelValuesSet := make(map[string]struct{})
 		for _, matchers := range matcherSets {
-			vals, callWarnings, err = q.LabelValues(ctx, name, nil, matchers...)
+			vals, callWarnings, err = q.LabelValues(ctx, name, hints, matchers...)
 			if err != nil {
 				return nil, nil, &api.ApiError{Typ: api.ErrorExec, Err: err}, func() {}
 			}
@@ -1139,7 +1151,7 @@ func (qapi *QueryAPI) labelValues(r *http.Request) (interface{}, []error, *api.A
 		}
 		sort.Strings(vals)
 	} else {
-		vals, warnings, err = q.LabelValues(ctx, name, nil)
+		vals, warnings, err = q.LabelValues(ctx, name, hints)
 		if err != nil {
 			return nil, nil, &api.ApiError{Typ: api.ErrorExec, Err: err}, func() {}
 		}
@@ -1147,6 +1159,10 @@ func (qapi *QueryAPI) labelValues(r *http.Request) (interface{}, []error, *api.A
 
 	if vals == nil {
 		vals = make([]string, 0)
+	}
+
+	if hints != nil && hints.Limit > 0 && len(vals) > hints.Limit {
+		vals = vals[:hints.Limit]
 	}
 
 	return vals, warnings.AsErrors(), nil, func() {}
@@ -1275,7 +1291,24 @@ func (qapi *QueryAPI) labelNames(r *http.Request) (interface{}, []error, *api.Ap
 	var (
 		names    []string
 		warnings annotations.Annotations
+		hints    *storage.LabelHints
 	)
+
+	if limit := r.URL.Query().Get("limit"); limit != "" {
+		l, err := strconv.ParseUint(limit, 10, 32)
+		if err == nil {
+			if l > math.MaxInt32 {
+				l = math.MaxInt32
+			}
+			hints = &storage.LabelHints{
+				Limit: int(l),
+			}
+		}
+	}
+
+	if hints == nil {
+		hints = &storage.LabelHints{}
+	}
 
 	if len(matcherSets) > 0 {
 		var callWarnings annotations.Annotations
@@ -1305,6 +1338,11 @@ func (qapi *QueryAPI) labelNames(r *http.Request) (interface{}, []error, *api.Ap
 	}
 	if names == nil {
 		names = make([]string, 0)
+	}
+
+	if hints.Limit > 0 && len(names) > hints.Limit {
+		names = names[:hints.Limit]
+		warnings = warnings.Add(errors.New("results truncated due to limit"))
 	}
 
 	return names, warnings.AsErrors(), nil, func() {}

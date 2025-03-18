@@ -23,7 +23,7 @@ jobs:
         with:
           go-version: 1.23.x
 
-      - uses: actions/cache@e12d46a63a90f2fae62d114769bbf2a179198b5c # v3.3.3
+      - uses: actions/cache@0c907a75c2c80ebcb7f088228285e798b750cf8f # v4.2.1
         with:
           path: |
             ~/.cache/go-build
@@ -58,7 +58,7 @@ jobs:
         with:
           go-version: 1.23.x
 
-      - uses: actions/cache@e12d46a63a90f2fae62d114769bbf2a179198b5c # v3.3.3
+      - uses: actions/cache@0c907a75c2c80ebcb7f088228285e798b750cf8f # v4.2.1
         with:
           path: |
             ~/.cache/go-build
@@ -85,7 +85,7 @@ jobs:
           check-latest: true
           cache-dependency-path: "**/*.sum"
 
-      - uses: actions/cache@e12d46a63a90f2fae62d114769bbf2a179198b5c # v3.3.3
+      - uses: actions/cache@0c907a75c2c80ebcb7f088228285e798b750cf8f # v4.2.1
         with:
           path: |
             ~/go/pkg/mod

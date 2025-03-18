@@ -409,7 +409,7 @@ func (q *querier) selectFn(ctx context.Context, hints *storage.SelectHints, ms .
 }
 
 // LabelValues returns all potential values for a label name.
-func (q *querier) LabelValues(ctx context.Context, name string, _ *storage.LabelHints, matchers ...*labels.Matcher) ([]string, annotations.Annotations, error) {
+func (q *querier) LabelValues(ctx context.Context, name string, hints *storage.LabelHints, matchers ...*labels.Matcher) ([]string, annotations.Annotations, error) {
 	span, ctx := tracing.StartSpan(ctx, "querier_label_values")
 	defer span.Finish()
 
@@ -421,12 +421,17 @@ func (q *querier) LabelValues(ctx context.Context, name string, _ *storage.Label
 		return nil, nil, errors.Wrap(err, "converting prom matchers to storepb matchers")
 	}
 
+	if hints == nil {
+		hints = &storage.LabelHints{}
+	}
+
 	resp, err := q.proxy.LabelValues(ctx, &storepb.LabelValuesRequest{
 		Label:                   name,
 		PartialResponseStrategy: q.partialResponseStrategy,
 		Start:                   q.mint,
 		End:                     q.maxt,
 		Matchers:                pbMatchers,
+		Limit:                   int64(hints.Limit),
 	})
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "proxy LabelValues()")

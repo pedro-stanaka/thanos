@@ -526,8 +526,13 @@ func (s *ProxyStore) LabelNames(ctx context.Context, r *storepb.LabelNamesReques
 	}
 
 	level.Debug(s.logger).Log("msg", strings.Join(storeDebugMsgs, ";"))
+
+	result := strutil.MergeUnsortedSlices(names...)
+	if r.Limit > 0 && len(result) > int(r.Limit) {
+		result = result[:r.Limit]
+	}
 	return &storepb.LabelNamesResponse{
-		Names:    strutil.MergeUnsortedSlices(names...),
+		Names:    result,
 		Warnings: warnings,
 	}, nil
 }
@@ -578,6 +583,7 @@ func (s *ProxyStore) LabelValues(ctx context.Context, r *storepb.LabelValuesRequ
 				Start:                   r.Start,
 				End:                     r.End,
 				Matchers:                r.Matchers,
+				Limit:                   r.Limit,
 			})
 			if err != nil {
 				msg := "fetch label values from store %s"
@@ -605,9 +611,14 @@ func (s *ProxyStore) LabelValues(ctx context.Context, r *storepb.LabelValuesRequ
 		return nil, err
 	}
 
+	vals := strutil.MergeUnsortedSlices(all...)
+	if r.Limit > 0 && len(vals) > int(r.Limit) {
+		vals = vals[:r.Limit]
+	}
+
 	level.Debug(s.logger).Log("msg", strings.Join(storeDebugMsgs, ";"))
 	return &storepb.LabelValuesResponse{
-		Values:   strutil.MergeUnsortedSlices(all...),
+		Values:   vals,
 		Warnings: warnings,
 	}, nil
 }
