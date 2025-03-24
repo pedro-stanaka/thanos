@@ -337,6 +337,7 @@ replace (
 	// Required by Cortex https://github.com/cortexproject/cortex/pull/3051.
 	github.com/bradfitz/gomemcache => github.com/themihai/gomemcache v0.0.0-20180902122335-24332e2d58ab
 
+	// https://github.com/andrejbranch/prometheus/commit/84b8b376ddb69652df869f3f4d2fb8086cc41638
 	github.com/prometheus/prometheus => github.com/andrejbranch/prometheus v0.0.0-20250320190333-84b8b376ddb6
 
 	// Override due to https://github.com/weaveworks/common/issues/239
