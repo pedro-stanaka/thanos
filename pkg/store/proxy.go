@@ -6,14 +6,15 @@ package store
 import (
 	"context"
 	"fmt"
+	"maps"
 	"math"
+	"slices"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
-	"github.com/opentracing/opentracing-go"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
@@ -351,7 +352,7 @@ func (s *ProxyStore) Series(originalRequest *storepb.SeriesRequest, srv storepb.
 		defer respSet.Close()
 	}
 
-	level.Debug(reqLogger).Log("msg", "Series: started fanout streams", "status", strings.Join(storeDebugMsgs, ";"))
+	_ = level.Debug(reqLogger).Log("msg", "Series: started fanout streams", "status", strings.Join(storeDebugMsgs, ";"))
 
 	var respHeap seriesStream = NewProxyResponseHeap(storeResponses...)
 	if s.enableDedup {
@@ -365,7 +366,7 @@ func (s *ProxyStore) Series(originalRequest *storepb.SeriesRequest, srv storepb.
 		}
 
 		if err := srv.Send(resp); err != nil {
-			level.Error(reqLogger).Log("msg", "failed to send series", "err", err)
+			_ = level.Error(reqLogger).Log("msg", "failed to send series", "err", err)
 			return status.Error(codes.Unknown, errors.Wrap(err, "send series response").Error())
 		}
 	}
@@ -525,7 +526,7 @@ func (s *ProxyStore) LabelNames(ctx context.Context, r *storepb.LabelNamesReques
 		return nil, err
 	}
 
-	level.Debug(s.logger).Log("msg", strings.Join(storeDebugMsgs, ";"))
+	_ = level.Debug(s.logger).Log("msg", strings.Join(storeDebugMsgs, ";"))
 
 	result := strutil.MergeUnsortedSlices(names...)
 	if r.Limit > 0 && len(result) > int(r.Limit) {
@@ -541,14 +542,21 @@ func (s *ProxyStore) LabelNames(ctx context.Context, r *storepb.LabelNamesReques
 func (s *ProxyStore) LabelValues(ctx context.Context, r *storepb.LabelValuesRequest) (
 	*storepb.LabelValuesResponse, error,
 ) {
+	type storeResult struct {
+		values   []string
+		warnings []string
+	}
+
 	var (
 		warnings       []string
-		all            [][]string
-		mtx            sync.Mutex
 		g, gctx        = errgroup.WithContext(ctx)
 		storeDebugMsgs []string
-		span           opentracing.Span
+		resultsChan    = make(chan storeResult, 1000) // TODO: Adjust buffer size
+		resultSet      = make(map[string]struct{})
 	)
+
+	ctxWithCancel, cancel := context.WithCancel(gctx)
+	defer cancel()
 
 	for _, st := range s.stores() {
 		st := st
@@ -558,15 +566,14 @@ func (s *ProxyStore) LabelValues(ctx context.Context, r *storepb.LabelValuesRequ
 		if storeID == "" {
 			storeID = "Store Gateway"
 		}
-		span, gctx = tracing.StartSpan(gctx, "proxy.label_values", tracing.Tags{
+		storeSpan, storeCtx := tracing.StartSpan(ctx, "proxy.label_values", tracing.Tags{
 			"store.id":       storeID,
 			"store.addr":     storeAddr,
 			"store.is_local": isLocalStore,
 		})
-		defer span.Finish()
 
 		// We might be able to skip the store if its meta information indicates it cannot have series matching our query.
-		if ok, reason := storeMatches(gctx, st, s.debugLogging, r.Start, r.End); !ok {
+		if ok, reason := storeMatches(storeCtx, st, s.debugLogging, r.Start, r.End); !ok {
 			if s.debugLogging {
 				storeDebugMsgs = append(storeDebugMsgs, fmt.Sprintf("Store %s filtered out due to %v", st, reason))
 			}
@@ -577,7 +584,9 @@ func (s *ProxyStore) LabelValues(ctx context.Context, r *storepb.LabelValuesRequ
 		}
 
 		g.Go(func() error {
-			resp, err := st.LabelValues(gctx, &storepb.LabelValuesRequest{
+			defer storeSpan.Finish()
+
+			resp, err := st.LabelValues(ctxWithCancel, &storepb.LabelValuesRequest{
 				Label:                   r.Label,
 				PartialResponseDisabled: r.PartialResponseDisabled,
 				Start:                   r.Start,
@@ -591,32 +600,44 @@ func (s *ProxyStore) LabelValues(ctx context.Context, r *storepb.LabelValuesRequ
 				if r.PartialResponseDisabled {
 					return err
 				}
-
-				mtx.Lock()
-				warnings = append(warnings, errors.Wrapf(err, msg, st).Error())
-				mtx.Unlock()
+				resultsChan <- storeResult{
+					values:   nil,
+					warnings: []string{errors.Wrapf(err, msg, st).Error()},
+				}
 				return nil
 			}
 
-			mtx.Lock()
-			warnings = append(warnings, resp.Warnings...)
-			all = append(all, resp.Values)
-			mtx.Unlock()
-
+			resultsChan <- storeResult{
+				values:   resp.Values,
+				warnings: resp.Warnings,
+			}
 			return nil
 		})
 	}
 
-	if err := g.Wait(); err != nil {
-		return nil, err
+	go func() {
+		_ = g.Wait() // Ignore error since we handle it via partial response
+		close(resultsChan)
+	}()
+
+	// Collect results from channel
+collectLoop:
+	for result := range resultsChan {
+		warnings = append(warnings, result.warnings...)
+		for _, val := range result.values {
+			if _, exists := resultSet[val]; !exists {
+				resultSet[val] = struct{}{}
+				if r.Limit > 0 && len(resultSet) >= int(r.Limit) {
+					cancel() // Cancel remaining goroutines
+					break collectLoop
+				}
+			}
+		}
 	}
 
-	vals := strutil.MergeUnsortedSlices(all...)
-	if r.Limit > 0 && len(vals) > int(r.Limit) {
-		vals = vals[:r.Limit]
-	}
-
-	level.Debug(s.logger).Log("msg", strings.Join(storeDebugMsgs, ";"))
+	_ = level.Debug(s.logger).Log("msg", strings.Join(storeDebugMsgs, ";"))
+	vals := slices.Collect(maps.Keys(resultSet))
+	slices.Sort(vals)
 	return &storepb.LabelValuesResponse{
 		Values:   vals,
 		Warnings: warnings,
