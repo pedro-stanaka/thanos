@@ -57,6 +57,9 @@ message LabelValuesRequestHints {
     /// labels to filter which blocks get queried. If the list is empty, no per-block filtering
     /// is applied.
     repeated thanos.LabelMatcher block_matchers = 1 [(gogoproto.nullable) = false];
+
+    // label values deadline milliseconds
+    int64 deadline_milliseconds = 99;
 }
 
 message LabelValuesResponseHints {

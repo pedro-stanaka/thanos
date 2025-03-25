@@ -566,7 +566,7 @@ func (s *ProxyStore) LabelValues(ctx context.Context, r *storepb.LabelValuesRequ
 		if storeID == "" {
 			storeID = "Store Gateway"
 		}
-		storeSpan, storeCtx := tracing.StartSpan(ctx, "proxy.label_values", tracing.Tags{
+		storeSpan, storeCtx := tracing.StartSpan(ctxWithCancel, "proxy.label_values", tracing.Tags{
 			"store.id":       storeID,
 			"store.addr":     storeAddr,
 			"store.is_local": isLocalStore,
@@ -586,13 +586,14 @@ func (s *ProxyStore) LabelValues(ctx context.Context, r *storepb.LabelValuesRequ
 		g.Go(func() error {
 			defer storeSpan.Finish()
 
-			resp, err := st.LabelValues(ctxWithCancel, &storepb.LabelValuesRequest{
+			resp, err := st.LabelValues(storeCtx, &storepb.LabelValuesRequest{
 				Label:                   r.Label,
 				PartialResponseDisabled: r.PartialResponseDisabled,
 				Start:                   r.Start,
 				End:                     r.End,
 				Matchers:                r.Matchers,
 				Limit:                   r.Limit,
+				Hints:                   r.Hints,
 			})
 			if err != nil {
 				msg := "fetch label values from store %s"

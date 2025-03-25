@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/go-kit/log"
+	"github.com/gogo/protobuf/types"
 	"github.com/opentracing/opentracing-go"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
@@ -22,6 +23,7 @@ import (
 	"github.com/thanos-io/thanos/pkg/extprom"
 	"github.com/thanos-io/thanos/pkg/gate"
 	"github.com/thanos-io/thanos/pkg/store"
+	"github.com/thanos-io/thanos/pkg/store/hintspb"
 	"github.com/thanos-io/thanos/pkg/store/storepb"
 	"github.com/thanos-io/thanos/pkg/tracing"
 )
@@ -425,6 +427,14 @@ func (q *querier) LabelValues(ctx context.Context, name string, hints *storage.L
 		hints = &storage.LabelHints{}
 	}
 
+	var reqHints *types.Any
+	r, err := types.MarshalAny(&hintspb.LabelValuesRequestHints{
+		DeadlineMilliseconds: hints.ValuesDeadline.Milliseconds(),
+	})
+	if err == nil {
+		reqHints = r
+	}
+
 	resp, err := q.proxy.LabelValues(ctx, &storepb.LabelValuesRequest{
 		Label:                   name,
 		PartialResponseStrategy: q.partialResponseStrategy,
@@ -432,6 +442,7 @@ func (q *querier) LabelValues(ctx context.Context, name string, hints *storage.L
 		End:                     q.maxt,
 		Matchers:                pbMatchers,
 		Limit:                   int64(hints.Limit),
+		Hints:                   reqHints,
 	})
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "proxy LabelValues()")

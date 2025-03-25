@@ -709,7 +709,7 @@ func (p *PrometheusStore) LabelValues(ctx context.Context, r *storepb.LabelValue
 	}
 
 	if len(matchers) == 0 || p.labelCallsSupportMatchers() {
-		vals, err = p.client.LabelValuesInGRPC(ctx, p.base, r.Label, matchers, r.Start, r.End, int(r.Limit))
+		vals, err = p.client.LabelValuesInGRPC(ctx, p.base, r.Label, matchers, r.Start, r.End, int(r.Limit), 0)
 		if err != nil {
 			return nil, err
 		}
