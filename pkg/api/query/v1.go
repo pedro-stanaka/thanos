@@ -1118,17 +1118,24 @@ func (qapi *QueryAPI) labelValues(r *http.Request) (interface{}, []error, *api.A
 	var (
 		vals     []string
 		warnings annotations.Annotations
-		hints    *storage.LabelHints
 	)
+	hints := &storage.LabelHints{}
 	if limit := r.URL.Query().Get("limit"); limit != "" {
 		l, err := strconv.ParseUint(limit, 10, 32)
 		if err == nil {
 			if l > math.MaxInt32 {
 				l = math.MaxInt32
 			}
-			hints = &storage.LabelHints{
-				Limit: int(l),
+			hints.Limit = int(l)
+		}
+	}
+	if deadlineMillis := r.URL.Query().Get("deadline_milliseconds"); deadlineMillis != "" {
+		d, err := strconv.ParseUint(deadlineMillis, 10, 64)
+		if err == nil {
+			if d > math.MaxInt64 {
+				d = math.MaxInt64
 			}
+			hints.ValuesDeadline = time.Duration(d) * time.Millisecond
 		}
 	}
 	if len(matcherSets) > 0 {

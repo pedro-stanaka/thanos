@@ -746,7 +746,7 @@ func (c *Client) LabelNamesInGRPC(ctx context.Context, base *url.URL, matchers [
 
 // LabelValuesInGRPC returns all known label values for a given label name. It uses gRPC errors.
 // NOTE: This method is tested in pkg/store/prometheus_test.go against Prometheus.
-func (c *Client) LabelValuesInGRPC(ctx context.Context, base *url.URL, label string, matchers []*labels.Matcher, startTime, endTime int64, limit int) ([]string, error) {
+func (c *Client) LabelValuesInGRPC(ctx context.Context, base *url.URL, label string, matchers []*labels.Matcher, startTime, endTime int64, limit int, deadline time.Duration) ([]string, error) {
 	u := *base
 	u.Path = path.Join(u.Path, "/api/v1/label/", label, "/values")
 	q := u.Query()
@@ -757,6 +757,7 @@ func (c *Client) LabelValuesInGRPC(ctx context.Context, base *url.URL, label str
 	q.Add("start", formatTime(timestamp.Time(startTime)))
 	q.Add("end", formatTime(timestamp.Time(endTime)))
 	q.Add("limit", strconv.Itoa(limit))
+	q.Add("deadline_milliseconds", strconv.FormatInt(deadline.Milliseconds(), 10))
 	u.RawQuery = q.Encode()
 
 	var m struct {
