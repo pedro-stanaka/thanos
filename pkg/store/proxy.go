@@ -15,6 +15,7 @@ import (
 
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
+	"github.com/gogo/protobuf/types"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
@@ -27,6 +28,7 @@ import (
 
 	"github.com/thanos-io/thanos/pkg/component"
 	"github.com/thanos-io/thanos/pkg/info/infopb"
+	"github.com/thanos-io/thanos/pkg/store/hintspb"
 	"github.com/thanos-io/thanos/pkg/store/labelpb"
 	"github.com/thanos-io/thanos/pkg/store/storepb"
 	"github.com/thanos-io/thanos/pkg/strutil"
@@ -553,15 +555,23 @@ func (s *ProxyStore) LabelValues(ctx context.Context, r *storepb.LabelValuesRequ
 		storeDebugMsgs []string
 		resultsChan    = make(chan storeResult, 1000) // TODO: Adjust buffer size
 		resultSet      = make(map[string]struct{})
+		deadline       time.Duration
 	)
 
 	ctxWithCancel, cancel := context.WithCancel(gctx)
 	defer cancel()
 
+	reqHints := &hintspb.LabelValuesRequestHints{}
+	err := types.UnmarshalAny(r.Hints, reqHints)
+	if err == nil && reqHints.DeadlineMilliseconds > 0 {
+		deadline = time.Millisecond * time.Duration(reqHints.DeadlineMilliseconds)
+	}
+
 	for _, st := range s.stores() {
 		st := st
 
 		storeAddr, isLocalStore := st.Addr()
+
 		storeID := labelpb.PromLabelSetsToString(st.LabelSets())
 		if storeID == "" {
 			storeID = "Store Gateway"
@@ -585,6 +595,11 @@ func (s *ProxyStore) LabelValues(ctx context.Context, r *storepb.LabelValuesRequ
 
 		g.Go(func() error {
 			defer storeSpan.Finish()
+
+			if isLocalStore && deadline > 0 {
+				storeCtx, cancel = context.WithTimeout(storeCtx, deadline)
+				defer cancel()
+			}
 
 			resp, err := st.LabelValues(storeCtx, &storepb.LabelValuesRequest{
 				Label:                   r.Label,

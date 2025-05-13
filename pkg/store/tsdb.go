@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/go-kit/log"
-	"github.com/gogo/protobuf/types"
 	"github.com/pkg/errors"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/storage"
@@ -25,7 +24,6 @@ import (
 	"github.com/thanos-io/thanos/pkg/component"
 	"github.com/thanos-io/thanos/pkg/info/infopb"
 	"github.com/thanos-io/thanos/pkg/runutil"
-	"github.com/thanos-io/thanos/pkg/store/hintspb"
 	"github.com/thanos-io/thanos/pkg/store/labelpb"
 	"github.com/thanos-io/thanos/pkg/store/storepb"
 )
@@ -432,12 +430,6 @@ func (s *TSDBStore) LabelValues(ctx context.Context, r *storepb.LabelValuesReque
 
 	hints := &storage.LabelHints{
 		Limit: int(r.Limit),
-	}
-
-	reqHints := &hintspb.LabelValuesRequestHints{}
-	err = types.UnmarshalAny(r.Hints, reqHints)
-	if err == nil {
-		hints.ValuesDeadline = time.Millisecond * time.Duration(reqHints.DeadlineMilliseconds)
 	}
 
 	res, _, err := q.LabelValues(ctx, r.Label, hints, matchers...)
