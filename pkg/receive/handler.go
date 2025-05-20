@@ -87,27 +87,36 @@ var (
 	errInternal    = errors.New("internal error")
 )
 
+type ReplicationProtocol string
+
+const (
+	ProtoReplication         ReplicationProtocol = "protobuf"
+	CapnProtoReplication     ReplicationProtocol = "capnproto"
+	CapnProtoZSTDReplication ReplicationProtocol = "capnproto-zstd"
+)
+
 // Options for the web Handler.
 type Options struct {
-	Writer                  *Writer
-	ListenAddress           string
-	Registry                *prometheus.Registry
-	TenantHeader            string
-	TenantField             string
-	DefaultTenantID         string
-	ReplicaHeader           string
-	Endpoint                string
-	ReplicationFactor       uint64
-	ReceiverMode            ReceiverMode
-	Tracer                  opentracing.Tracer
-	TLSConfig               *tls.Config
-	DialOpts                []grpc.DialOption
-	ForwardTimeout          time.Duration
-	MaxBackoff              time.Duration
-	RelabelConfigs          []*relabel.Config
-	TSDBStats               TSDBStats
-	Limiter                 *Limiter
-	UseCapNProtoReplication bool
+	Writer            *Writer
+	ListenAddress     string
+	Registry          *prometheus.Registry
+	TenantHeader      string
+	TenantField       string
+	DefaultTenantID   string
+	ReplicaHeader     string
+	Endpoint          string
+	ReplicationFactor uint64
+	ReceiverMode      ReceiverMode
+	Tracer            opentracing.Tracer
+	TLSConfig         *tls.Config
+	DialOpts          []grpc.DialOption
+	ForwardTimeout    time.Duration
+	MaxBackoff        time.Duration
+	RelabelConfigs    []*relabel.Config
+	TSDBStats         TSDBStats
+	Limiter           *Limiter
+
+	ReplicationProtocol ReplicationProtocol
 }
 
 // Handler serves a Prometheus remote write receiving HTTP endpoint.
@@ -150,7 +159,7 @@ func NewHandler(logger log.Logger, o *Options) *Handler {
 		writer:       o.Writer,
 		router:       route.New(),
 		options:      o,
-		peers:        newPeerGroup(logger, o.UseCapNProtoReplication, o.DialOpts...),
+		peers:        newPeerGroup(logger, o.ReplicationProtocol, o.DialOpts...),
 		receiverMode: o.ReceiverMode,
 		expBackoff: backoff.Backoff{
 			Factor: 2,
@@ -1158,24 +1167,24 @@ func newReplicationErrors(threshold, numErrors int) []*replicationErrors {
 	return errs
 }
 
-func newPeerGroup(logger log.Logger, useCapNProtoClient bool, dialOpts ...grpc.DialOption) *peerGroup {
+func newPeerGroup(logger log.Logger, protocol ReplicationProtocol, dialOpts ...grpc.DialOption) *peerGroup {
 	return &peerGroup{
 		logger:   logger,
 		dialOpts: dialOpts,
 		cache:    map[Endpoint]storepb.WriteableStoreClient{},
 		m:        sync.RWMutex{},
 		//nolint:staticcheck
-		dialer:             grpc.DialContext,
-		useCapNProtoClient: useCapNProtoClient,
+		dialer:              grpc.DialContext,
+		replicationProtocol: protocol,
 	}
 }
 
 type peerGroup struct {
-	logger             log.Logger
-	dialOpts           []grpc.DialOption
-	cache              map[Endpoint]storepb.WriteableStoreClient
-	m                  sync.RWMutex
-	useCapNProtoClient bool
+	logger              log.Logger
+	dialOpts            []grpc.DialOption
+	cache               map[Endpoint]storepb.WriteableStoreClient
+	m                   sync.RWMutex
+	replicationProtocol ReplicationProtocol
 
 	// dialer is used for testing.
 	dialer func(ctx context.Context, target string, opts ...grpc.DialOption) (conn *grpc.ClientConn, err error)
@@ -1198,16 +1207,22 @@ func (p *peerGroup) get(ctx context.Context, endpoint Endpoint) (storepb.Writeab
 		return c, nil
 	}
 	var client storepb.WriteableStoreClient
-	if p.useCapNProtoClient {
-		client = writecapnp.NewRemoteWriteClient(writecapnp.NewTCPDialer(endpoint.CapNProtoAddress), p.logger)
-	} else {
+	switch p.replicationProtocol {
+	case ProtoReplication:
 		conn, err := p.dialer(ctx, endpoint.Address, p.dialOpts...)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to dial peer")
 		}
 
 		client = storepb.NewWriteableStoreClient(conn)
+	case CapnProtoReplication:
+		client = writecapnp.NewRemoteWriteClient(writecapnp.NewTCPDialer(endpoint.CapNProtoAddress), writecapnp.NewPackedCodec, p.logger)
+	case CapnProtoZSTDReplication:
+		client = writecapnp.NewRemoteWriteClient(writecapnp.NewTCPDialer(endpoint.CapNProtoZSTDAddress), writecapnp.NewZSTDCodec, p.logger)
+	default:
+		return nil, fmt.Errorf("Unknown replication protocol %s", p.replicationProtocol)
 	}
+
 	p.cache[endpoint] = client
 	return client, nil
 }

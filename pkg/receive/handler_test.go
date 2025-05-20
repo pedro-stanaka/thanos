@@ -6,6 +6,7 @@ package receive
 import (
 	"bytes"
 	"context"
+	goerrors "errors"
 	"fmt"
 	"io"
 	"math"
@@ -21,8 +22,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-
-	goerrors "errors"
 
 	"github.com/alecthomas/units"
 	"github.com/go-kit/log"
@@ -225,15 +224,15 @@ func newTestHandlerHashring(
 		if capnpReplication {
 			writer := NewCapNProtoWriter(log.NewNopLogger(), newFakeTenantAppendable(appendables[i]), nil)
 			var (
-				listener = bufconn.Listen(1024)
-				handler  = NewCapNProtoHandler(log.NewNopLogger(), writer)
+				listener, zstdListener = bufconn.Listen(1024), bufconn.Listen(1024)
+				handler                = NewCapNProtoHandler(log.NewNopLogger(), writer)
 			)
 
-			srv := NewCapNProtoServer(listener, handler, log.NewNopLogger())
-			client := writecapnp.NewRemoteWriteClient(listener, log.NewNopLogger())
+			srv := NewCapNProtoServer(listener, zstdListener, handler, log.NewNopLogger())
+			client := writecapnp.NewRemoteWriteClient(listener, writecapnp.NewPackedCodec, log.NewNopLogger())
 			closers = append(closers, func() error {
 				srv.Shutdown()
-				return goerrors.Join(listener.Close(), client.Close())
+				return goerrors.Join(listener.Close(), zstdListener.Close(), client.Close())
 			})
 			go func() { _ = srv.ListenAndServe() }()
 			peers.cache[addr] = client

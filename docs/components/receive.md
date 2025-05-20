@@ -374,7 +374,11 @@ Flags:
       --receive.capnproto-address="0.0.0.0:19391"
                                  Address for the Cap'n Proto server.
       --receive.capnproto-replication
+                                 Deprecated: Use receive.replication-protocol.
                                  Use Cap'n Proto for replication requests.
+      --receive.capnproto-zstd-address="0.0.0.0:19392"
+                                 Address for the Cap'n Proto server with ZSTD
+                                 compression capabilities.
       --receive.default-tenant-id="default-tenant"
                                  Default tenant ID to use when none is provided
                                  via a header.
@@ -418,6 +422,9 @@ Flags:
       --receive.replication-factor=1
                                  How many times to replicate incoming write
                                  requests.
+      --receive.replication-protocol=protobuf
+                                 Specifies the protocol for replicating
+                                 remote-write requests.
       --receive.tenant-certificate-field=
                                  Use TLS client's certificate field to
                                  determine tenant for write requests.

@@ -39,13 +39,15 @@ const (
 	IngestorOnly   ReceiverMode = "IngestorOnly"
 	RouterIngestor ReceiverMode = "RouterIngestor"
 
-	DefaultCapNProtoPort string = "19391"
+	DefaultCapNProtoPort     string = "19391"
+	DefaultCapNProtoZSTDPort string = "19392"
 )
 
 type Endpoint struct {
-	Address          string `json:"address"`
-	CapNProtoAddress string `json:"capnproto_address"`
-	AZ               string `json:"az"`
+	Address              string `json:"address"`
+	CapNProtoAddress     string `json:"capnproto_address"`
+	CapNProtoZSTDAddress string `json:"capnproto_zstd_address"`
+	AZ                   string `json:"az"`
 }
 
 func (e *Endpoint) HasAddress(addr string) bool {
@@ -62,11 +64,15 @@ func (e *Endpoint) UnmarshalJSON(data []byte) error {
 
 	// If the Cap'n proto address is not set, initialize it
 	// to the existing address using the default cap'n proto server port.
-	if e.CapNProtoAddress != "" {
-		return nil
+	if e.CapNProtoAddress == "" {
+		if parts := strings.SplitN(e.Address, ":", 2); len(parts) <= 2 {
+			e.CapNProtoAddress = parts[0] + ":" + DefaultCapNProtoPort
+		}
 	}
-	if parts := strings.SplitN(e.Address, ":", 2); len(parts) <= 2 {
-		e.CapNProtoAddress = parts[0] + ":" + DefaultCapNProtoPort
+	if e.CapNProtoZSTDAddress == "" {
+		if parts := strings.SplitN(e.Address, ":", 2); len(parts) <= 2 {
+			e.CapNProtoZSTDAddress = parts[0] + ":" + DefaultCapNProtoZSTDPort
+		}
 	}
 	return nil
 }
@@ -88,6 +94,7 @@ func (e *Endpoint) unmarshal(data []byte) error {
 	e.Address = configEndpoint.Address
 	e.AZ = configEndpoint.AZ
 	e.CapNProtoAddress = configEndpoint.CapNProtoAddress
+	e.CapNProtoZSTDAddress = configEndpoint.CapNProtoZSTDAddress
 	return nil
 }
 

@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	goerrors "errors"
 	"fmt"
 	"net"
 	"os"
@@ -235,26 +236,31 @@ func runReceive(
 		return errors.Wrap(err, "creating limiter")
 	}
 
+	replicationProtocol := receive.ReplicationProtocol(conf.replicationProtocol)
+	if conf.useCapNProtoReplication {
+		_ = level.Warn(logger).Log("msg", "Detected the use of the deprecated receive.capnproto-replication flag, setting replication protocol to capnproto. This flag will eventually be removed in future releases. Please migrate to receive.replication-protocol.")
+		replicationProtocol = receive.CapnProtoReplication
+	}
 	webHandler := receive.NewHandler(log.With(logger, "component", "receive-handler"), &receive.Options{
-		Writer:                  writer,
-		ListenAddress:           conf.rwAddress,
-		Registry:                reg,
-		Endpoint:                conf.endpoint,
-		TenantHeader:            conf.tenantHeader,
-		TenantField:             conf.tenantField,
-		DefaultTenantID:         conf.defaultTenantID,
-		ReplicaHeader:           conf.replicaHeader,
-		ReplicationFactor:       conf.replicationFactor,
-		RelabelConfigs:          relabelConfig,
-		ReceiverMode:            receiveMode,
-		Tracer:                  tracer,
-		TLSConfig:               rwTLSConfig,
-		DialOpts:                dialOpts,
-		ForwardTimeout:          time.Duration(*conf.forwardTimeout),
-		MaxBackoff:              time.Duration(*conf.maxBackoff),
-		TSDBStats:               dbs,
-		Limiter:                 limiter,
-		UseCapNProtoReplication: conf.useCapNProtoReplication,
+		Writer:              writer,
+		ListenAddress:       conf.rwAddress,
+		Registry:            reg,
+		Endpoint:            conf.endpoint,
+		TenantHeader:        conf.tenantHeader,
+		TenantField:         conf.tenantField,
+		DefaultTenantID:     conf.defaultTenantID,
+		ReplicaHeader:       conf.replicaHeader,
+		ReplicationFactor:   conf.replicationFactor,
+		RelabelConfigs:      relabelConfig,
+		ReceiverMode:        receiveMode,
+		Tracer:              tracer,
+		TLSConfig:           rwTLSConfig,
+		DialOpts:            dialOpts,
+		ForwardTimeout:      time.Duration(*conf.forwardTimeout),
+		MaxBackoff:          time.Duration(*conf.maxBackoff),
+		TSDBStats:           dbs,
+		Limiter:             limiter,
+		ReplicationProtocol: replicationProtocol,
 	})
 
 	grpcProbe := prober.NewGRPC()
@@ -454,19 +460,24 @@ func runReceive(
 
 	{
 		capNProtoWriter := receive.NewCapNProtoWriter(logger, dbs, &receive.CapNProtoWriterOptions{
-			TooFarInFutureTimeWindow: int64(time.Duration(*conf.tsdbTooFarInFutureTimeWindow)),
+			TooFarInFutureTimeWindow: int64(*conf.tsdbTooFarInFutureTimeWindow),
 		})
 		handler := receive.NewCapNProtoHandler(logger, capNProtoWriter)
 		listener, err := net.Listen("tcp", conf.replicationAddr)
 		if err != nil {
 			return err
 		}
-		server := receive.NewCapNProtoServer(listener, handler, logger)
+		zstdListener, err := net.Listen("tcp", conf.zstdReplicationAddr)
+		if err != nil {
+			return err
+		}
+		server := receive.NewCapNProtoServer(listener, zstdListener, handler, logger)
 		g.Add(func() error {
 			return server.ListenAndServe()
 		}, func(err error) {
 			server.Shutdown()
-			if err := listener.Close(); err != nil {
+
+			if err := goerrors.Join(listener.Close(), zstdListener.Close()); err != nil {
 				level.Warn(logger).Log("msg", "Cap'n Proto server did not shut down gracefully", "err", err.Error())
 			}
 		})
@@ -802,15 +813,16 @@ type receiveConfig struct {
 
 	grpcConfig grpcConfig
 
-	replicationAddr    string
-	rwAddress          string
-	rwServerCert       string
-	rwServerKey        string
-	rwServerClientCA   string
-	rwClientCert       string
-	rwClientKey        string
-	rwClientServerCA   string
-	rwClientServerName string
+	replicationAddr     string
+	zstdReplicationAddr string
+	rwAddress           string
+	rwServerCert        string
+	rwServerKey         string
+	rwServerClientCA    string
+	rwClientCert        string
+	rwClientKey         string
+	rwClientServerCA    string
+	rwClientServerName  string
 
 	dataDir   string
 	labelStrs []string
@@ -822,17 +834,20 @@ type receiveConfig struct {
 	hashringsFileContent string
 	hashringsAlgorithm   string
 
-	refreshInterval         *model.Duration
-	endpoint                string
-	tenantHeader            string
-	tenantField             string
-	tenantLabelName         string
-	defaultTenantID         string
-	replicaHeader           string
-	replicationFactor       uint64
-	forwardTimeout          *model.Duration
-	maxBackoff              *model.Duration
-	compression             string
+	refreshInterval     *model.Duration
+	endpoint            string
+	tenantHeader        string
+	tenantField         string
+	tenantLabelName     string
+	defaultTenantID     string
+	replicaHeader       string
+	replicationFactor   uint64
+	forwardTimeout      *model.Duration
+	maxBackoff          *model.Duration
+	compression         string
+	replicationProtocol string
+
+	// Deprecated. Use replicationProtocol.
 	useCapNProtoReplication bool
 
 	tsdbMinBlockDuration         *model.Duration
@@ -922,10 +937,14 @@ func (rc *receiveConfig) registerFlag(cmd extkingpin.FlagClause) {
 	cmd.Flag("receive.grpc-compression", "Compression algorithm to use for gRPC requests to other receivers. Must be one of: "+compressionOptions).Default(snappy.Name).EnumVar(&rc.compression, snappy.Name, compressionNone)
 
 	cmd.Flag("receive.replication-factor", "How many times to replicate incoming write requests.").Default("1").Uint64Var(&rc.replicationFactor)
+	cmd.Flag("receive.replication-protocol", "Specifies the protocol for replicating remote-write requests.").
+		Default(string(receive.ProtoReplication)).
+		EnumVar(&rc.replicationProtocol, string(receive.ProtoReplication), string(receive.CapnProtoReplication), string(receive.CapnProtoZSTDReplication))
 
-	cmd.Flag("receive.capnproto-replication", "Use Cap'n Proto for replication requests.").Default("false").BoolVar(&rc.useCapNProtoReplication)
+	cmd.Flag("receive.capnproto-replication", "Deprecated: Use receive.replication-protocol. Use Cap'n Proto for replication requests.").Default("false").BoolVar(&rc.useCapNProtoReplication)
 
 	cmd.Flag("receive.capnproto-address", "Address for the Cap'n Proto server.").Default(fmt.Sprintf("0.0.0.0:%s", receive.DefaultCapNProtoPort)).StringVar(&rc.replicationAddr)
+	cmd.Flag("receive.capnproto-zstd-address", "Address for the Cap'n Proto server with ZSTD compression capabilities.").Default(fmt.Sprintf("0.0.0.0:%s", receive.DefaultCapNProtoZSTDPort)).StringVar(&rc.zstdReplicationAddr)
 
 	rc.forwardTimeout = extkingpin.ModelDuration(cmd.Flag("receive-forward-timeout", "Timeout for each forward request.").Default("5s").Hidden())
 

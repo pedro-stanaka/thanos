@@ -88,22 +88,27 @@ func TestUnmarshalEndpointSlice(t *testing.T) {
 		{
 			name:      "Endpoints as string slice",
 			json:      `["node-1"]`,
-			endpoints: []Endpoint{{Address: "node-1", CapNProtoAddress: "node-1:19391"}},
+			endpoints: []Endpoint{{Address: "node-1", CapNProtoAddress: "node-1:19391", CapNProtoZSTDAddress: "node-1:19392"}},
 		},
 		{
 			name:      "Endpoints as endpoints slice",
 			json:      `[{"address": "node-1", "az": "az-1"}]`,
-			endpoints: []Endpoint{{Address: "node-1", CapNProtoAddress: "node-1:19391", AZ: "az-1"}},
+			endpoints: []Endpoint{{Address: "node-1", CapNProtoAddress: "node-1:19391", CapNProtoZSTDAddress: "node-1:19392", AZ: "az-1"}},
 		},
 		{
 			name:      "Endpoints as string slice with port",
 			json:      `["node-1:80"]`,
-			endpoints: []Endpoint{{Address: "node-1:80", CapNProtoAddress: "node-1:19391"}},
+			endpoints: []Endpoint{{Address: "node-1:80", CapNProtoAddress: "node-1:19391", CapNProtoZSTDAddress: "node-1:19392"}},
 		},
 		{
 			name:      "Endpoints as string slice with capnproto port",
 			json:      `[{"address": "node-1", "capnproto_address": "node-1:81"}]`,
-			endpoints: []Endpoint{{Address: "node-1", CapNProtoAddress: "node-1:81"}},
+			endpoints: []Endpoint{{Address: "node-1", CapNProtoAddress: "node-1:81", CapNProtoZSTDAddress: "node-1:19392"}},
+		},
+		{
+			name:      "Endpoints as string slice with capnproto zstd port",
+			json:      `[{"address": "node-1", "capnproto_zstd_address": "node-1:82"}]`,
+			endpoints: []Endpoint{{Address: "node-1", CapNProtoAddress: "node-1:19391", CapNProtoZSTDAddress: "node-1:82"}},
 		},
 	}
 	for _, tcase := range cases {

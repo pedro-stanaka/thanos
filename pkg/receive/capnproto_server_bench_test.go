@@ -5,6 +5,7 @@ package receive
 
 import (
 	"context"
+	"errors"
 	"os"
 	"testing"
 
@@ -52,28 +53,35 @@ func BenchmarkCapNProtoServer_SingleConcurrentClient(b *testing.B) {
 				&fakeAppendable{appender: newFakeAppender(nil, nil, nil)}),
 			&CapNProtoWriterOptions{},
 		)
-		listener = bufconn.Listen(1024)
-		handler  = NewCapNProtoHandler(log.NewNopLogger(), writer)
-		srv      = NewCapNProtoServer(listener, handler, log.NewNopLogger())
+		listener, zstdListener = bufconn.Listen(1024), bufconn.Listen(1024)
+		handler                = NewCapNProtoHandler(log.NewNopLogger(), writer)
 	)
-	go func() {
-		_ = srv.ListenAndServe()
-	}()
-	defer srv.Shutdown()
-
-	const numIterations = 10000
-	var totalWrites float64
-	b.ResetTimer()
-	b.ReportAllocs()
-	client := writecapnp.NewRemoteWriteClient(listener, log.NewLogfmtLogger(os.Stdout))
-	for i := 0; i < b.N; i++ {
-		for j := 0; j < numIterations; j++ {
-			_, err := client.RemoteWrite(context.Background(), &wreq)
-			require.NoError(b, err)
-		}
-		totalWrites += numIterations
+	protocols := map[string]tuple[writecapnp.Dialer, writecapnp.NewCodecFunc]{
+		"packed": {listener, writecapnp.NewPackedCodec},
+		"zstd":   {zstdListener, writecapnp.NewZSTDCodec},
 	}
-	require.NoError(b, client.Close())
-	require.NoError(b, listener.Close())
-	b.ReportMetric(totalWrites, "total_writes")
+	for name, protocol := range protocols {
+		srv := NewCapNProtoServer(listener, zstdListener, handler, log.NewNopLogger())
+		go func() {
+			_ = srv.ListenAndServe()
+		}()
+		b.Cleanup(srv.Shutdown)
+		b.Run(name, func(b *testing.B) {
+			const numIterations = 10000
+			var totalWrites float64
+			b.ResetTimer()
+			b.ReportAllocs()
+			client := writecapnp.NewRemoteWriteClient(protocol.A, protocol.B, log.NewLogfmtLogger(os.Stdout))
+			for i := 0; i < b.N; i++ {
+				for j := 0; j < numIterations; j++ {
+					_, err := client.RemoteWrite(context.Background(), &wreq)
+					require.NoError(b, err)
+				}
+				totalWrites += numIterations
+			}
+			require.NoError(b, client.Close())
+			b.ReportMetric(totalWrites, "total_writes")
+		})
+	}
+	require.NoError(b, errors.Join(listener.Close(), zstdListener.Close()))
 }
