@@ -576,6 +576,7 @@ func runQuery(
 	)
 
 	// Periodically update the store set with the addresses we see in our cluster.
+	// runutil.Repeat will run the function immediately, then periodically.
 	{
 		ctx, cancel := context.WithCancel(context.Background())
 		g.Add(func() error {
@@ -839,6 +840,22 @@ func runQuery(
 		)
 
 		g.Add(func() error {
+			// Wait for initial endpoint update before marking as ready
+			// Use store response timeout as timeout, if not set, use 30 seconds as default
+			timeout := storeResponseTimeout
+			if timeout == 0 {
+				timeout = 30 * time.Second
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), timeout)
+			defer cancel()
+
+			level.Info(logger).Log("msg", "waiting for initial endpoint discovery before marking gRPC as ready", "timeout", timeout)
+			if err := endpoints.WaitForFirstUpdate(ctx); err != nil {
+				level.Warn(logger).Log("msg", "timeout waiting for first endpoint update before marking gRPC as ready", "err", err, "timeout", timeout)
+			} else {
+				level.Info(logger).Log("msg", "initial endpoint discovery completed, marking gRPC as ready")
+			}
+
 			statusProber.Ready()
 			return s.ListenAndServe()
 		}, func(error) {
