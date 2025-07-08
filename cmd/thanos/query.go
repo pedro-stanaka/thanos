@@ -575,6 +575,59 @@ func runQuery(
 		)
 	)
 
+	// Perform initial DNS resolution before starting periodic updates.
+	// This ensures that DNS providers have addresses when the first endpoint update runs.
+	{
+		resolveCtx, resolveCancel := context.WithTimeout(context.Background(), dnsSDInterval)
+		defer resolveCancel()
+
+		level.Info(logger).Log("msg", "performing initial DNS resolution")
+
+		// Resolve store addresses
+		if len(storeAddrs) > 0 {
+			if err := dnsStoreProvider.Resolve(resolveCtx, append(fileSDCache.Addresses(), storeAddrs...)); err != nil {
+				level.Error(logger).Log("msg", "initial DNS resolution failed for storeAPIs", "err", err)
+			}
+		}
+
+		// Resolve rule addresses
+		if len(ruleAddrs) > 0 {
+			if err := dnsRuleProvider.Resolve(resolveCtx, ruleAddrs); err != nil {
+				level.Error(logger).Log("msg", "initial DNS resolution failed for rulesAPIs", "err", err)
+			}
+		}
+
+		// Resolve target addresses
+		if len(targetAddrs) > 0 {
+			if err := dnsTargetProvider.Resolve(resolveCtx, targetAddrs); err != nil {
+				level.Error(logger).Log("msg", "initial DNS resolution failed for targetsAPIs", "err", err)
+			}
+		}
+
+		// Resolve metadata addresses
+		if len(metadataAddrs) > 0 {
+			if err := dnsMetadataProvider.Resolve(resolveCtx, metadataAddrs); err != nil {
+				level.Error(logger).Log("msg", "initial DNS resolution failed for metadataAPIs", "err", err)
+			}
+		}
+
+		// Resolve exemplar addresses
+		if len(exemplarAddrs) > 0 {
+			if err := dnsExemplarProvider.Resolve(resolveCtx, exemplarAddrs); err != nil {
+				level.Error(logger).Log("msg", "initial DNS resolution failed for exemplarsAPI", "err", err)
+			}
+		}
+
+		// Resolve endpoint addresses
+		if len(endpointAddrs) > 0 {
+			if err := dnsEndpointProvider.Resolve(resolveCtx, endpointAddrs); err != nil {
+				level.Error(logger).Log("msg", "initial DNS resolution failed for endpoints", "err", err)
+			}
+		}
+
+		level.Info(logger).Log("msg", "initial DNS resolution completed")
+	}
+
 	// Periodically update the store set with the addresses we see in our cluster.
 	// runutil.Repeat will run the function immediately, then periodically.
 	{
