@@ -35,8 +35,9 @@ import (
 )
 
 const (
-	unhealthyEndpointMessage  = "removing endpoint because it's unhealthy or does not exist"
-	noMetadataEndpointMessage = "cannot obtain metadata: neither info nor store client found"
+	unhealthyEndpointMessage    = "removing endpoint because it's unhealthy or does not exist"
+	noMetadataEndpointMessage   = "cannot obtain metadata: neither info nor store client found"
+	failedMetadataLookupMessage = "cannot obtain metadata"
 )
 
 type queryConnMetricLabel string
@@ -76,8 +77,11 @@ func (es *endpointRef) Metadata(ctx context.Context, infoClient infopb.InfoClien
 		resp, err := infoClient.Info(ctx, &infopb.InfoRequest{}, grpc.WaitForReady(true))
 		if err == nil {
 			return &endpointMetadata{resp}, nil
+		} else {
+			return nil, errors.Wrap(err, failedMetadataLookupMessage)
 		}
 	}
+
 	return nil, errors.New(noMetadataEndpointMessage)
 }
 
