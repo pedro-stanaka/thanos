@@ -98,6 +98,7 @@ type ProxyStore struct {
 
 type proxyStoreMetrics struct {
 	emptyStreamResponses prometheus.Counter
+	resolvedStores       prometheus.Histogram
 }
 
 func newProxyStoreMetrics(reg prometheus.Registerer) *proxyStoreMetrics {
@@ -106,6 +107,12 @@ func newProxyStoreMetrics(reg prometheus.Registerer) *proxyStoreMetrics {
 	m.emptyStreamResponses = promauto.With(reg).NewCounter(prometheus.CounterOpts{
 		Name: "thanos_proxy_store_empty_stream_responses_total",
 		Help: "Total number of empty responses received.",
+	})
+	m.resolvedStores = promauto.With(reg).NewHistogram(prometheus.HistogramOpts{
+		Name:                           "thanos_proxy_stores_resolved",
+		Help:                           "Total number of stores resolved for a Series call.",
+		NativeHistogramBucketFactor:    1.1,
+		NativeHistogramMaxBucketNumber: 1024,
 	})
 
 	return &m
@@ -304,8 +311,12 @@ func (s *ProxyStore) Series(originalRequest *storepb.SeriesRequest, srv storepb.
 		WithoutReplicaLabels:    originalRequest.WithoutReplicaLabels,
 	}
 
-	var stores []Client
-	for _, st := range s.stores() {
+	var (
+		stores    []Client
+		allStores = s.stores()
+	)
+	s.metrics.resolvedStores.Observe(float64(len(allStores)))
+	for _, st := range allStores {
 		// We might be able to skip the store if its meta information indicates it cannot have series matching our query.
 		if ok, reason := storeMatches(srv.Context(), st, s.debugLogging, originalRequest.MinTime, originalRequest.MaxTime, matchers...); !ok {
 			if s.debugLogging {

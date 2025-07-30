@@ -16,6 +16,8 @@ import (
 	"github.com/go-kit/log/level"
 	"github.com/opentracing/opentracing-go"
 	"github.com/pkg/errors"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/prometheus/model/histogram"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/promql"
@@ -66,13 +68,26 @@ type remoteEndpoints struct {
 	logger     log.Logger
 	getClients func() []Client
 	opts       Opts
+
+	resolvedEndpoints prometheus.Histogram
 }
 
-func NewRemoteEndpoints(logger log.Logger, getClients func() []Client, opts Opts) api.RemoteEndpoints {
+func NewRemoteEndpoints(
+	logger log.Logger,
+	reg *prometheus.Registry,
+	getClients func() []Client,
+	opts Opts,
+) api.RemoteEndpoints {
 	return remoteEndpoints{
 		logger:     logger,
 		getClients: getClients,
 		opts:       opts,
+		resolvedEndpoints: promauto.With(reg).NewHistogram(prometheus.HistogramOpts{
+			Name:                           "thanos_query_remote_engines_resolved",
+			Help:                           "The number of remote query engines resolved",
+			NativeHistogramBucketFactor:    1.1,
+			NativeHistogramMaxBucketNumber: 1024,
+		}),
 	}
 }
 
@@ -82,6 +97,8 @@ func (r remoteEndpoints) Engines() []api.RemoteEngine {
 	for i := range clients {
 		engines[i] = newCachingEngine(NewRemoteEngine(r.logger, clients[i], r.opts))
 	}
+	r.resolvedEndpoints.Observe(float64(len(clients)))
+
 	return engines
 }
 
