@@ -459,15 +459,15 @@ func runQuery(
 		}
 	}
 
-	for _, endpoint := range strictEndpoints {
-		if dns.IsDynamicNode(endpoint) {
-			return errors.Errorf("%s is a dynamically specified endpoint i.e. it uses SD and that is not permitted under strict mode. Use --endpoint for this", endpoint)
-		}
-	}
-
 	dnsEndpointProvider := dns.NewProvider(
 		logger,
 		extprom.WrapRegistererWithPrefix("thanos_query_endpoints_", reg),
+		dns.ResolverType(dnsSDResolver),
+	)
+
+	dnsStrictEndpointProvider := dns.NewProvider(
+		logger,
+		extprom.WrapRegistererWithPrefix("thanos_query_strict_endpoints_", reg),
 		dns.ResolverType(dnsSDResolver),
 	)
 
@@ -521,7 +521,7 @@ func runQuery(
 					specs = append(specs, query.NewGRPCEndpointSpec(addr, true))
 				}
 
-				for _, addr := range strictEndpoints {
+				for _, addr := range dnsStrictEndpointProvider.Addresses() {
 					specs = append(specs, query.NewGRPCEndpointSpec(addr, true))
 				}
 
@@ -625,6 +625,12 @@ func runQuery(
 			}
 		}
 
+		if len(strictEndpoints) > 0 {
+			if err := dnsStrictEndpointProvider.Resolve(resolveCtx, strictEndpoints); err != nil {
+				level.Error(logger).Log("msg", "initial DNS resolution failed for strict endpoints", "err", err)
+			}
+		}
+
 		level.Info(logger).Log("msg", "initial DNS resolution completed")
 	}
 
@@ -705,7 +711,9 @@ func runQuery(
 				}
 				if err := dnsEndpointProvider.Resolve(resolveCtx, endpointAddrs); err != nil {
 					level.Error(logger).Log("msg", "failed to resolve addresses passed using endpoint flag", "err", err)
-
+				}
+				if err := dnsStrictEndpointProvider.Resolve(resolveCtx, strictEndpoints); err != nil {
+					level.Error(logger).Log("msg", "failed to resolve addresses passed using strict endpoint flag", "err", err)
 				}
 				return nil
 			})
