@@ -1,10 +1,13 @@
 version: 2
+enable-beta-ecosystems: true
 updates:
   - package-ecosystem: "gomod"
     directory: "/"
     vendor: false
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 90
     labels: ["dependencies"]
   - package-ecosystem: "docker"
     directory: "/"
