@@ -112,10 +112,23 @@ func (r *CapNProtoWriter) Write(ctx context.Context, tenantID string, wreq *writ
 		// We drop the exemplars in case the series doesn't exist.
 		if ref != 0 && len(series.Exemplars) > 0 {
 			for _, ex := range series.Exemplars {
-				exLogger := log.With(tLogger, "exemplarLset", ex.Labels)
+				// Deep copy exemplar labels; capnp symbols memory may be freed after this call.
+				var exBuilder labels.ScratchBuilder
+				ex.Labels.Range(func(l labels.Label) {
+					exBuilder.Add(strings.Clone(l.Name), strings.Clone(l.Value))
+				})
+				exBuilder.Sort()
+				exLset := exBuilder.Labels()
+
+				exLogger := log.With(tLogger, "exemplarLset", exLset)
+
+				if err := validateLabels(exLset); err != nil {
+					errorTracker.addExemplarError(err, exLogger)
+					continue
+				}
 
 				if _, err = app.AppendExemplar(ref, lset, exemplar.Exemplar{
-					Labels: ex.Labels,
+					Labels: exLset,
 					Value:  ex.Value,
 					Ts:     ex.Ts,
 					HasTs:  true,
