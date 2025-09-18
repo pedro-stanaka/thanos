@@ -5,6 +5,8 @@ package queryfrontend
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -50,6 +52,23 @@ func (m querySizeMiddleware) Do(ctx context.Context, r queryrange.Request) (quer
 
 		// Enforce maximum bytes if configured.
 		if m.maxBytes > 0 && len(q) > m.maxBytes {
+			// Return a Prometheus-compatible JSON error body.
+			bodyStruct := struct {
+				Status    string `json:"status"`
+				ErrorType string `json:"errorType"`
+				Error     string `json:"error"`
+			}{
+				Status:    "error",
+				ErrorType: "bad_data",
+				Error:     fmt.Sprintf("query parameter too large: %d bytes > max %d bytes", len(q), m.maxBytes),
+			}
+			if b, err := json.Marshal(bodyStruct); err == nil {
+				return nil, httpgrpc.ErrorFromHTTPResponse(&httpgrpc.HTTPResponse{
+					Code: http.StatusUnprocessableEntity,
+					Body: b,
+				})
+			}
+			// Fallback in the unlikely event of JSON marshal failure.
 			return nil, httpgrpc.Errorf(http.StatusBadRequest, "query parameter too large: %d bytes > max %d bytes", len(q), m.maxBytes)
 		}
 	}
