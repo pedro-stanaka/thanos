@@ -78,6 +78,7 @@ func NewTripperware(config Config, reg prometheus.Registerer, logger log.Logger)
 		prometheus.WrapRegistererWith(prometheus.Labels{"tripperware": "query_instant"}, reg),
 		config.ForwardHeaders,
 		config.CortexHandlerConfig.QueryStatsEnabled,
+		config.QueryRangeConfig.MaxQuerySizeBytes,
 	)
 	return func(next http.RoundTripper) http.RoundTripper {
 		return newRoundTripper(next, queryRangeTripperware(next), labelsTripperware(next), queryInstantTripperware(next), reg)
@@ -161,6 +162,8 @@ func newQueryRangeTripperware(
 	forwardHeaders []string,
 ) (queryrange.Tripperware, error) {
 	queryRangeMiddleware := []queryrange.Middleware{queryrange.NewLimitsMiddleware(limits)}
+	// Record and optionally enforce query size for range queries.
+	queryRangeMiddleware = append(queryRangeMiddleware, QuerySizeMiddleware(config.MaxQuerySizeBytes, reg))
 	m := queryrange.NewInstrumentMiddlewareMetrics(reg)
 
 	queryRangeMiddleware = append(
@@ -335,6 +338,7 @@ func newInstantQueryTripperware(
 	reg prometheus.Registerer,
 	forwardHeaders []string,
 	forceStats bool,
+	maxQuerySizeBytes int,
 ) queryrange.Tripperware {
 	var instantQueryMiddlewares []queryrange.Middleware
 	m := queryrange.NewInstrumentMiddlewareMetrics(reg)
@@ -351,6 +355,10 @@ func newInstantQueryTripperware(
 		instantQueryMiddlewares,
 		queryrange.NewStatsMiddleware(forceStats),
 	)
+
+	// Record query size for instant queries. Enforcement is controlled via config in the range path,
+	// but we still export the histogram here with no limit (0 disables enforcement).
+	instantQueryMiddlewares = append(instantQueryMiddlewares, QuerySizeMiddleware(maxQuerySizeBytes, reg))
 
 	return func(next http.RoundTripper) http.RoundTripper {
 		rt := queryrange.NewRoundTripper(next, codec, forwardHeaders, instantQueryMiddlewares...)

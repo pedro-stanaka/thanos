@@ -93,6 +93,9 @@ func registerQueryFrontend(app *extkingpin.App) {
 	cmd.Flag("query-range.max-query-length", "Limit the query time range (end - start time) in the query-frontend, 0 disables it.").
 		Default("0").DurationVar((*time.Duration)(&cfg.QueryRangeConfig.Limits.MaxQueryLength))
 
+	cmd.Flag("query-frontend.max-query-size-bytes", "Maximum allowed size in bytes of the PromQL 'query' parameter. 0 disables the limit.").
+		Default("0").IntVar(&cfg.QueryRangeConfig.MaxQuerySizeBytes)
+
 	cmd.Flag("query-range.max-query-parallelism", "Maximum number of query range requests will be scheduled in parallel by the Frontend.").
 		Default("14").IntVar(&cfg.QueryRangeConfig.Limits.MaxQueryParallelism)
 

@@ -226,6 +226,9 @@ type QueryRangeConfig struct {
 	HorizontalShards       int64
 	MaxRetries             int
 	Limits                 *cortexvalidation.Limits
+
+	// MaxQuerySizeBytes enforces a maximum size of the PromQL 'query' parameter (bytes). 0 disables.
+	MaxQuerySizeBytes int
 }
 
 // LabelsConfig holds the config for labels tripperware.
