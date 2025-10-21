@@ -12,6 +12,7 @@ import (
 
 	"github.com/go-kit/log"
 	"github.com/stretchr/testify/require"
+	"github.com/thanos-io/thanos/pkg/gate"
 	"github.com/thanos-io/thanos/pkg/store/labelpb"
 	"github.com/thanos-io/thanos/pkg/store/storepb/prompb"
 	"github.com/thanos-io/thanos/pkg/testutil/custom"
@@ -37,7 +38,7 @@ func TestCapNProtoServer_SingleSerialClient(t *testing.T) {
 			&CapNProtoWriterOptions{},
 		)
 		listener, zstdListener = bufconn.Listen(1024), bufconn.Listen(1024)
-		handler                = NewCapNProtoHandler(logger, writer)
+		handler                = NewCapNProtoHandler(logger, writer, gate.NewNoop())
 	)
 	protocols := map[string]tuple[writecapnp.Dialer, writecapnp.NewCodecFunc]{
 		"packed": {listener, writecapnp.NewPackedCodec},
@@ -76,7 +77,7 @@ func TestCapNProtoServer_SingleParallelClient(t *testing.T) {
 			&CapNProtoWriterOptions{},
 		)
 		listener, zstdListener = bufconn.Listen(1024), bufconn.Listen(1024)
-		handler                = NewCapNProtoHandler(logger, writer)
+		handler                = NewCapNProtoHandler(logger, writer, gate.NewNoop())
 	)
 	protocols := map[string]tuple[writecapnp.Dialer, writecapnp.NewCodecFunc]{
 		"packed": {listener, writecapnp.NewPackedCodec},
@@ -115,7 +116,7 @@ func TestCapNProtoServer_MultipleSerialClients(t *testing.T) {
 			&CapNProtoWriterOptions{},
 		)
 		listener, zstdListener = bufconn.Listen(1024), bufconn.Listen(1024)
-		handler                = NewCapNProtoHandler(logger, writer)
+		handler                = NewCapNProtoHandler(logger, writer, gate.NewNoop())
 	)
 
 	protocols := map[string]tuple[writecapnp.Dialer, writecapnp.NewCodecFunc]{
@@ -154,7 +155,7 @@ func TestCapNProtoServer_MultipleParallelClients(t *testing.T) {
 			&CapNProtoWriterOptions{},
 		)
 		listener, zstdListener = bufconn.Listen(1024), bufconn.Listen(1024)
-		handler                = NewCapNProtoHandler(logger, writer)
+		handler                = NewCapNProtoHandler(logger, writer, gate.NewNoop())
 	)
 
 	protocols := map[string]tuple[writecapnp.Dialer, writecapnp.NewCodecFunc]{

@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/test/bufconn"
 
+	"github.com/thanos-io/thanos/pkg/gate"
 	"github.com/thanos-io/thanos/pkg/receive/writecapnp"
 	"github.com/thanos-io/thanos/pkg/store/labelpb"
 	"github.com/thanos-io/thanos/pkg/store/storepb"
@@ -54,7 +55,7 @@ func BenchmarkCapNProtoServer_SingleConcurrentClient(b *testing.B) {
 			&CapNProtoWriterOptions{},
 		)
 		listener, zstdListener = bufconn.Listen(1024), bufconn.Listen(1024)
-		handler                = NewCapNProtoHandler(log.NewNopLogger(), writer)
+		handler                = NewCapNProtoHandler(log.NewNopLogger(), writer, gate.NewNoop())
 	)
 	protocols := map[string]tuple[writecapnp.Dialer, writecapnp.NewCodecFunc]{
 		"packed": {listener, writecapnp.NewPackedCodec},

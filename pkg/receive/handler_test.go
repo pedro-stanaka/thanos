@@ -45,6 +45,7 @@ import (
 
 	"github.com/thanos-io/thanos/pkg/block/metadata"
 	"github.com/thanos-io/thanos/pkg/extkingpin"
+	"github.com/thanos-io/thanos/pkg/gate"
 	"github.com/thanos-io/thanos/pkg/receive/writecapnp"
 	"github.com/thanos-io/thanos/pkg/runutil"
 	"github.com/thanos-io/thanos/pkg/store/labelpb"
@@ -225,7 +226,7 @@ func newTestHandlerHashring(
 			writer := NewCapNProtoWriter(log.NewNopLogger(), newFakeTenantAppendable(appendables[i]), nil)
 			var (
 				listener, zstdListener = bufconn.Listen(1024), bufconn.Listen(1024)
-				handler                = NewCapNProtoHandler(log.NewNopLogger(), writer)
+				handler                = NewCapNProtoHandler(log.NewNopLogger(), writer, gate.NewNoop())
 			)
 
 			srv := NewCapNProtoServer(listener, zstdListener, handler, log.NewNopLogger())

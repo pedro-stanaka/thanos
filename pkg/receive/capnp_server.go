@@ -13,9 +13,11 @@ import (
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
 	"github.com/pkg/errors"
+	"golang.org/x/sync/errgroup"
+
+	"github.com/thanos-io/thanos/pkg/gate"
 	"github.com/thanos-io/thanos/pkg/receive/writecapnp"
 	"github.com/thanos-io/thanos/pkg/runutil"
-	"golang.org/x/sync/errgroup"
 )
 
 type CapNProtoServer struct {
@@ -83,13 +85,19 @@ func (c *CapNProtoServer) Shutdown() {
 type CapNProtoHandler struct {
 	writer *CapNProtoWriter
 	logger log.Logger
+	gate   gate.Gate
 }
 
-func NewCapNProtoHandler(logger log.Logger, writer *CapNProtoWriter) *CapNProtoHandler {
-	return &CapNProtoHandler{logger: logger, writer: writer}
+func NewCapNProtoHandler(logger log.Logger, writer *CapNProtoWriter, g gate.Gate) *CapNProtoHandler {
+	return &CapNProtoHandler{logger: logger, writer: writer, gate: g}
 }
 
 func (c CapNProtoHandler) Write(ctx context.Context, call writecapnp.Writer_write) error {
+	if err := c.gate.Start(ctx); err != nil {
+		return err
+	}
+	defer c.gate.Done()
+
 	call.Go()
 	wr, err := call.Args().Wr()
 	if err != nil {

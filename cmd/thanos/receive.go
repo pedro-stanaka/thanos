@@ -40,6 +40,7 @@ import (
 	"github.com/thanos-io/thanos/pkg/extgrpc/snappy"
 	"github.com/thanos-io/thanos/pkg/extkingpin"
 	"github.com/thanos-io/thanos/pkg/extprom"
+	"github.com/thanos-io/thanos/pkg/gate"
 	"github.com/thanos-io/thanos/pkg/info"
 	"github.com/thanos-io/thanos/pkg/info/infopb"
 	"github.com/thanos-io/thanos/pkg/logging"
@@ -459,10 +460,11 @@ func runReceive(
 	}
 
 	{
+		writeGate := gate.New(reg, int(conf.maxCapnPConcurrency), gate.WriteRequests)
 		capNProtoWriter := receive.NewCapNProtoWriter(logger, dbs, &receive.CapNProtoWriterOptions{
 			TooFarInFutureTimeWindow: int64(*conf.tsdbTooFarInFutureTimeWindow),
 		})
-		handler := receive.NewCapNProtoHandler(logger, capNProtoWriter)
+		handler := receive.NewCapNProtoHandler(logger, capNProtoWriter, writeGate)
 		listener, err := net.Listen("tcp", conf.replicationAddr)
 		if err != nil {
 			return err
@@ -824,6 +826,8 @@ type receiveConfig struct {
 	rwClientServerCA    string
 	rwClientServerName  string
 
+	maxCapnPConcurrency int64
+
 	dataDir   string
 	labelStrs []string
 
@@ -942,9 +946,9 @@ func (rc *receiveConfig) registerFlag(cmd extkingpin.FlagClause) {
 		EnumVar(&rc.replicationProtocol, string(receive.ProtoReplication), string(receive.CapnProtoReplication), string(receive.CapnProtoZSTDReplication))
 
 	cmd.Flag("receive.capnproto-replication", "Deprecated: Use receive.replication-protocol. Use Cap'n Proto for replication requests.").Default("false").BoolVar(&rc.useCapNProtoReplication)
-
 	cmd.Flag("receive.capnproto-address", "Address for the Cap'n Proto server.").Default(fmt.Sprintf("0.0.0.0:%s", receive.DefaultCapNProtoPort)).StringVar(&rc.replicationAddr)
 	cmd.Flag("receive.capnproto-zstd-address", "Address for the Cap'n Proto server with ZSTD compression capabilities.").Default(fmt.Sprintf("0.0.0.0:%s", receive.DefaultCapNProtoZSTDPort)).StringVar(&rc.zstdReplicationAddr)
+	cmd.Flag("receive.capnproto-max-concurrent-write", "Maximum number of concurrent Cap'n Proto write requests to process.").Default("10000").Int64Var(&rc.maxCapnPConcurrency)
 
 	rc.forwardTimeout = extkingpin.ModelDuration(cmd.Flag("receive-forward-timeout", "Timeout for each forward request.").Default("5s").Hidden())
 
