@@ -669,15 +669,14 @@ func (t *MultiTSDB) getOrLoadTenant(tenantID string, blockingStart bool) (*tenan
 	// conditions, where since the fast path was tried, there may have actually
 	// been the same tenant inserted in the map.
 	t.mtx.Lock()
+	defer t.mtx.Unlock()
 	tenant, exist = t.tenants[tenantID]
 	if exist {
-		t.mtx.Unlock()
 		return tenant, nil
 	}
 
 	tenant = newTenant()
 	t.tenants[tenantID] = tenant
-	t.mtx.Unlock()
 
 	logger := log.With(t.logger, "tenant", tenantID)
 	if !blockingStart {
@@ -692,7 +691,7 @@ func (t *MultiTSDB) getOrLoadTenant(tenantID string, blockingStart bool) (*tenan
 }
 
 func (t *MultiTSDB) TenantAppendable(tenantID string) (Appendable, error) {
-	tenant, err := t.getOrLoadTenant(tenantID, false)
+	tenant, err := t.getOrLoadTenant(tenantID, true)
 	if err != nil {
 		return nil, err
 	}
