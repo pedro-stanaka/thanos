@@ -146,20 +146,7 @@ func (r *RemoteWriteClient) connect(ctx context.Context) error {
 	r.codec = codec
 
 	rpcConn := rpc.NewConn(rpc.NewTransport(r.codec), nil)
-	writer := Writer(rpcConn.Bootstrap(ctx))
-	// Ensure the bootstrap resolves; if it fails, tear down and let caller retry.
-	if err := writer.Resolve(ctx); err != nil {
-		level.Warn(r.logger).Log("msg", "capnp bootstrap failed, recreating client", "err", err)
-		_ = rpcConn.Close()
-		// Close the codec and reset so next attempt will fully recreate the client.
-		codec := r.codec
-		r.codec = nil
-		go func() {
-			runutil.CloseWithLogOnErr(r.logger, codec, "capnp codec")
-		}()
-		return errors.Wrap(err, "capnp bootstrap failed")
-	}
-	r.writer = writer
+	r.writer = Writer(rpcConn.Bootstrap(ctx))
 	return nil
 }
 
