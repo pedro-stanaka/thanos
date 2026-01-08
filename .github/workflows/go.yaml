@@ -21,7 +21,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@6edd4406fa81c3da01a34fa6f6343087c207a568 # v3.5.0
         with:
-          go-version: 1.23.x
+          go-version: 1.25.x
 
       - uses: actions/cache@0c907a75c2c80ebcb7f088228285e798b750cf8f # v4.2.1
         with:
@@ -56,7 +56,7 @@ jobs:
       - name: Install Go.
         uses: actions/setup-go@6edd4406fa81c3da01a34fa6f6343087c207a568 # v3.5.0
         with:
-          go-version: 1.23.x
+          go-version: 1.25.x
 
       - uses: actions/cache@0c907a75c2c80ebcb7f088228285e798b750cf8f # v4.2.1
         with:
@@ -81,7 +81,7 @@ jobs:
       - name: Install Go.
         uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32 # v5.0.2
         with:
-          go-version: 1.23
+          go-version: 1.25
           check-latest: true
           cache-dependency-path: "**/*.sum"
 

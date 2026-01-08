@@ -1,4 +1,4 @@
-FROM golang:1.23.2-alpine3.20 as builder
+FROM golang:1.25.5-alpine as builder
 # Copied from Dockerfile.multi-stage, but using a different base image
 
 WORKDIR $GOPATH/src/github.com/thanos-io/thanos
@@ -10,6 +10,8 @@ RUN apk update && apk add --no-cache alpine-sdk
 # while COPY supports the basic copying of local files into the container.
 # https://docs.docker.com/develop/develop-images/dockerfile_best-practices/#add-or-copy
 COPY . $GOPATH/src/github.com/thanos-io/thanos
+
+ENV GOEXPERIMENT=greenteagc
 
 ARG BUILD_TARGET="build"
 RUN git update-index --refresh; make $BUILD_TARGET
