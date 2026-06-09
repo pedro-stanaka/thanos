@@ -33,6 +33,7 @@ const (
 	// StatusClientClosedRequest is the status code for when a client request cancellation of an http request
 	StatusClientClosedRequest = 499
 	ServiceTimingHeaderName   = "Server-Timing"
+	forwardedUserHeaderName   = "X-Forwarded-User"
 )
 
 var (
@@ -199,14 +200,22 @@ func (f *Handler) reportFailedQuery(r *http.Request, queryString url.Values, res
 }
 
 func (f *Handler) remoteUser(r *http.Request) string {
-	remoteUser := "-"
-	// Prefer reading remote user from header. Fall back to the value of basic authentication.
+	// Prefer the configured header, then the standard forwarded identity header, then basic authentication.
 	if f.cfg.SlowQueryLogsUserHeader != "" {
-		remoteUser = r.Header.Get(f.cfg.SlowQueryLogsUserHeader)
-	} else {
-		remoteUser, _, _ = r.BasicAuth()
+		if user := r.Header.Get(f.cfg.SlowQueryLogsUserHeader); user != "" {
+			return user
+		}
 	}
-	return remoteUser
+
+	if user := r.Header.Get(forwardedUserHeaderName); user != "" {
+		return user
+	}
+
+	if user, _, ok := r.BasicAuth(); ok && user != "" {
+		return user
+	}
+
+	return "-"
 }
 
 func getRequestId(r *http.Request) (string, bool) {

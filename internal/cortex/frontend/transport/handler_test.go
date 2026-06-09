@@ -112,6 +112,82 @@ func TestHandler_SlowQueryLog(t *testing.T) {
 	}
 }
 
+func TestHandler_RemoteUser(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		cfg       HandlerConfig
+		headers   map[string]string
+		basicUser string
+		want      string
+	}{
+		{
+			name: "configured header wins",
+			cfg: HandlerConfig{
+				SlowQueryLogsUserHeader: "X-Grafana-User",
+			},
+			headers: map[string]string{
+				"X-Grafana-User":        "grafana@example.com",
+				forwardedUserHeaderName: "ingress-user",
+			},
+			basicUser: "basic-user",
+			want:      "grafana@example.com",
+		},
+		{
+			name: "configured header missing falls back to forwarded user",
+			cfg: HandlerConfig{
+				SlowQueryLogsUserHeader: "X-Grafana-User",
+			},
+			headers: map[string]string{
+				forwardedUserHeaderName: "ingress-user",
+			},
+			basicUser: "basic-user",
+			want:      "ingress-user",
+		},
+		{
+			name: "forwarded user wins without configured header",
+			headers: map[string]string{
+				forwardedUserHeaderName: "ingress-user",
+			},
+			basicUser: "basic-user",
+			want:      "ingress-user",
+		},
+		{
+			name: "basic auth is last identity fallback",
+			cfg: HandlerConfig{
+				SlowQueryLogsUserHeader: "X-Grafana-User",
+			},
+			basicUser: "basic-user",
+			want:      "basic-user",
+		},
+		{
+			name: "no identity uses placeholder",
+			cfg: HandlerConfig{
+				SlowQueryLogsUserHeader: "X-Grafana-User",
+			},
+			want: "-",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			req := httptest.NewRequest("GET", "/api/v1/query", nil)
+			for name, value := range tt.headers {
+				req.Header.Set(name, value)
+			}
+			if tt.basicUser != "" {
+				req.SetBasicAuth(tt.basicUser, "password")
+			}
+
+			handler := &Handler{cfg: tt.cfg}
+			require.Equal(t, tt.want, handler.remoteUser(req))
+		})
+	}
+}
+
 func TestHandler_FailedQueryLog(t *testing.T) {
 	t.Parallel()
 
